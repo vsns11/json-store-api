@@ -21,51 +21,77 @@ src/main/resources/
 openshift/              Deployment, Service, Route, HPA, BuildConfig
 ```
 
-## Run it
+## Getting started
 
-**With Docker** — brings up PostgreSQL too:
+### What you need
+
+| Path | Needs |
+| --- | --- |
+| With Docker (recommended) | Docker Desktop, or Docker Engine with Compose v2 |
+| Without Docker | JDK 21 or newer, PostgreSQL 14 or newer. Maven comes with the repo (`./mvnw`) |
+
+### With Docker
+
+Brings up PostgreSQL, an OpenLDAP directory to sign in against, and the API.
 
 ```bash
-cp .env.example .env   # then edit the password
+git clone <this-repo> json-store-api
+cd json-store-api
+cp .env.example .env      # then set DB_PASSWORD and JWT_SECRET
 docker compose up -d --build
 ```
 
-**Locally** — needs a PostgreSQL and JDK 21+:
+Give it a minute on the first run — it builds the image and downloads PostgreSQL and OpenLDAP. Check it
+came up:
 
 ```bash
-createdb jsonstore && ./mvnw spring-boot:run
+docker compose ps                       # three services, all healthy
+curl -s localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"secret"}'
 ```
 
-It defaults to `localhost:5432/jsonstore` with your OS username and an empty password, which is what a
-stock Homebrew PostgreSQL gives you, and seeds three example profiles into an empty database (never
-under the `prod` profile).
+A token in the response means the database, the directory and the API are all talking to each other.
+The store starts empty: the container runs the `prod` profile, which never seeds anything.
 
-## Authentication
+Stop it with `docker compose down`, or `docker compose down -v` to throw the database away too.
 
-Users sign in against LDAP. The bind happens once, at `POST /api/auth/login`; everything after that
-carries a short-lived bearer token, so no session is kept and any replica can serve any request.
+### Without Docker
 
-Group membership in the directory becomes a role — `cn=admins` becomes `ROLE_ADMINS` — and deleting a
-profile requires it. Everything else needs only a valid token.
+An in-process LDAP server starts automatically outside the `prod` profile, so only PostgreSQL is needed:
 
-**Locally there is nothing to install.** Outside the `prod` profile an in-process LDAP server starts with
-the directory in `src/main/resources/ldap/users.ldif`:
+```bash
+createdb jsonstore
+./mvnw spring-boot:run
+```
+
+It defaults to `localhost:5432/jsonstore` with your operating-system username and an empty password,
+which is what a stock Homebrew PostgreSQL gives you, and seeds three example profiles into an empty
+database. Override any of it with the environment variables below.
+
+### Signing in
+
+Both paths give you the same two accounts:
 
 | User | Password | Groups | Can delete |
 | --- | --- | --- | --- |
 | `alice` | `secret` | admins, developers | yes |
 | `bob` | `secret` | developers | no |
 
-`docker compose up` instead runs a real OpenLDAP container seeded from `deploy/ldap/bootstrap.ldif`
-with the same two accounts, which is closer to what production does.
+### The web client
 
-```bash
-TOKEN=$(curl -s localhost:8080/api/auth/login -H 'Content-Type: application/json' \
-  -d '{"username":"alice","password":"secret"}' | jq -r .token)
-curl -s localhost:8080/api/profiles -H "Authorization: Bearer $TOKEN"
-```
+The browser app is a separate repository, `json-store-web`. Start this API first, then follow that
+repository's README; in development it proxies to `localhost:8080`.
 
-To point at a corporate directory, set `LDAP_URL` and the DN patterns below; nothing else changes.
+### If something does not start
+
+| Symptom | Cause and fix |
+| --- | --- |
+| `port is already allocated` | Something else holds 5432, 8080 or 389. Set `DB_PORT`, `API_PORT` or `LDAP_PORT` in `.env` |
+| `Cannot connect to the Docker daemon` | Docker Desktop is not running |
+| `release version 21 not supported` | An older JDK is first on the path: `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` on macOS |
+| `password authentication failed` | `DB_USER`/`DB_PASSWORD` do not match the database. With a local PostgreSQL, leave both unset to use your own account |
+| `Validate failed: migration checksum mismatch` | A migration changed after being applied. In development, `docker compose down -v` (or `dropdb jsonstore && createdb jsonstore`) and start again |
+| Sign-in returns 401 for a user you know exists | `LDAP_USER_DN_PATTERNS` does not match where users live in your directory |
 
 ## Configuration
 
