@@ -35,11 +35,12 @@ class ProfileController {
     @GetMapping
     PageResponse<ProfileSummary> list(
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String tag,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "updatedAt") String sort,
             @RequestParam(defaultValue = "desc") String direction) {
-        return service.list(search, page, size, sort, direction);
+        return service.list(search, tag, page, size, sort, direction);
     }
 
     @GetMapping("/stats")

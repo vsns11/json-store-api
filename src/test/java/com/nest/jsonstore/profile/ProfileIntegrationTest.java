@@ -151,6 +151,37 @@ class ProfileIntegrationTest {
                 .andExpect(jsonPath("$.template").doesNotExist());
     }
 
+    /** Tag filtering is exact, unlike the free-text search which would also match the inputs. */
+    @Test
+    void narrowsToOneTag() throws Exception {
+        String alice = tokenFor("alice");
+
+        mockMvc.perform(as(post("/api/profiles"), alice).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name":"Smoke one","tags":["smoke","checkout"],"payload":{"note":"regression lives here too"}}"""))
+                .andExpect(status().isCreated());
+        mockMvc.perform(as(post("/api/profiles"), alice).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name":"Regression one","tags":["regression"],"payload":{"note":"x"}}"""))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(as(get("/api/profiles").param("tag", "smoke"), alice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].name").value("Smoke one"));
+
+        // The word appears in another profile's inputs, but the tag filter does not care.
+        mockMvc.perform(as(get("/api/profiles").param("tag", "regression"), alice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].name").value("Regression one"));
+
+        // Tag and search narrow together.
+        mockMvc.perform(as(get("/api/profiles").param("tag", "checkout").param("search", "nothing-matches"), alice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(0));
+    }
+
     @Test
     void rejectsPayloadsOverTheConfiguredLimit() throws Exception {
         String oversized = "{\"blob\":\"" + "x".repeat(500) + "\"}";

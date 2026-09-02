@@ -16,16 +16,21 @@ public interface ProfileRepository extends JpaRepository<Profile, UUID> {
      * identical to the index definition, or PostgreSQL will fall back to scanning every row.
      */
     String SEARCH_PREDICATE = """
-            where cast(:search as text) is null
-               or (p.name || ' ' || coalesce(p.description, '') || ' ' || p.tags::text || ' ' || p.payload::text)
-                   ilike '%' || cast(:search as text) || '%'
+            where (cast(:search as text) is null
+                or (p.name || ' ' || coalesce(p.description, '') || ' ' || p.tags::text || ' ' || p.payload::text)
+                    ilike '%' || cast(:search as text) || '%')
+              and (cast(:tag as text) is null
+                or p.tags @> jsonb_build_array(cast(:tag as text)))
             """;
 
-    /** Free-text search over the name, the description, the tags and the inputs themselves. */
+    /**
+     * Free-text search over the name, the description, the tags and the inputs themselves,
+     * optionally narrowed to one tag.
+     */
     @Query(value = "select p.* from profile p " + SEARCH_PREDICATE,
             countQuery = "select count(*) from profile p " + SEARCH_PREDICATE,
             nativeQuery = true)
-    Page<Profile> search(@Param("search") String search, Pageable pageable);
+    Page<Profile> search(@Param("search") String search, @Param("tag") String tag, Pageable pageable);
 
     @Query("select coalesce(sum(p.sizeBytes), 0) from Profile p")
     long totalBytes();

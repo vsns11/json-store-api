@@ -124,7 +124,7 @@ All endpoints need a bearer token except `POST /api/auth/login`.
 | `POST` | `/api/auth/login` | `{username, password}` — binds to LDAP, returns a token and roles |
 | `GET` | `/api/auth/me` | Who the token belongs to |
 | `GET` | `/api/templates` | The catalogue of input fragments the composer merges |
-| `GET` | `/api/profiles` | `search`, `page`, `size`, `sort`, `direction`; returns summaries |
+| `GET` | `/api/profiles` | `search`, `tag`, `page`, `size`, `sort`, `direction`; returns summaries |
 | `GET` | `/api/profiles/stats` | Profile count, total input bytes, last change |
 | `GET` | `/api/profiles/{id}` | One profile including its inputs |
 | `POST` | `/api/profiles` | Create · `201` with the stored profile |
@@ -245,6 +245,8 @@ profiles (95 MB of jsonb) on a laptop container, timed end to end through the AP
 
 What matters as the store or the traffic grows:
 
+- **Filtering by tag is exact and cheap**, unlike the free-text search: it is a containment test on
+  the tags array, answered by a GIN index (migration V5).
 - **Search is the one query with real cost.** It reads the name, description, tags and inputs, and is
   served by a trigram index (migration V4). Without it, a search matching a single row took 455 ms at
   100k because every row had to be read; with it, 8 ms. Broad terms are still linear in the number of

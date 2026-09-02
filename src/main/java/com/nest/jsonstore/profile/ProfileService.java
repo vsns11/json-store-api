@@ -41,9 +41,9 @@ public class ProfileService {
         this.limits = limits;
     }
 
-    public PageResponse<ProfileSummary> list(String search, int page, int size, String sort, String direction) {
+    public PageResponse<ProfileSummary> list(String search, String tag, int page, int size, String sort, String direction) {
         return PageResponse.of(
-                repository.search(StringUtils.hasText(search) ? search.trim() : null, pageable(page, size, sort, direction)),
+                repository.search(trimToNull(search), trimToNull(tag), pageable(page, size, sort, direction)),
                 mapper::toSummary);
     }
 
