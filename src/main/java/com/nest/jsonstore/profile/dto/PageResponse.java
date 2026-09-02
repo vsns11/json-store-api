@@ -1,4 +1,4 @@
-package com.nest.jsonstore.document.dto;
+package com.nest.jsonstore.profile.dto;
 
 import org.springframework.data.domain.Page;
 

@@ -1,4 +1,4 @@
-package com.nest.jsonstore.document;
+package com.nest.jsonstore.profile;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {"app.seed-examples=false", "app.limits.max-payload-bytes=400"})
 @AutoConfigureMockMvc
 @Testcontainers
-class JsonDocumentIntegrationTest {
+class ProfileIntegrationTest {
 
     @Container
     @ServiceConnection
@@ -64,7 +64,7 @@ class JsonDocumentIntegrationTest {
 
     @Test
     void refusesAnyoneWithoutAToken() throws Exception {
-        mockMvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/profiles")).andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -88,7 +88,7 @@ class JsonDocumentIntegrationTest {
     void storesThePayloadAsRealJsonbAndFindsItByItsContents() throws Exception {
         String alice = tokenFor("alice");
 
-        String id = mockMvc.perform(as(post("/api/documents"), alice)
+        String id = mockMvc.perform(as(post("/api/profiles"), alice)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Topology","tags":["infra"],
@@ -102,29 +102,29 @@ class JsonDocumentIntegrationTest {
 
         // Stored as a jsonb object, so PostgreSQL can read inside it.
         String type = jdbcTemplate.queryForObject(
-                "select jsonb_typeof(payload) from json_document where id = ?::uuid", String.class, id);
+                "select jsonb_typeof(payload) from profile where id = ?::uuid", String.class, id);
         String region = jdbcTemplate.queryForObject(
-                "select payload -> 'services' -> 0 ->> 'region' from json_document where id = ?::uuid", String.class, id);
+                "select payload -> 'services' -> 0 ->> 'region' from profile where id = ?::uuid", String.class, id);
         assertThat(type).isEqualTo("object");
         assertThat(region).isEqualTo("eu-west");
 
         // Search reaches into the payload, not just the name.
-        mockMvc.perform(as(get("/api/documents").param("search", "eu-west"), alice))
+        mockMvc.perform(as(get("/api/profiles").param("search", "eu-west"), alice))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalItems").value(1))
                 .andExpect(jsonPath("$.items[0].name").value("Topology"));
 
         // Deleting belongs to the admins group: bob is only a developer.
-        mockMvc.perform(as(delete("/api/documents/{id}", id), tokenFor("bob"))).andExpect(status().isForbidden());
-        mockMvc.perform(as(delete("/api/documents/{id}", id), alice)).andExpect(status().isNoContent());
-        mockMvc.perform(as(get("/api/documents/{id}", id), alice)).andExpect(status().isNotFound());
+        mockMvc.perform(as(delete("/api/profiles/{id}", id), tokenFor("bob"))).andExpect(status().isForbidden());
+        mockMvc.perform(as(delete("/api/profiles/{id}", id), alice)).andExpect(status().isNoContent());
+        mockMvc.perform(as(get("/api/profiles/{id}", id), alice)).andExpect(status().isNotFound());
     }
 
     @Test
     void rejectsPayloadsOverTheConfiguredLimit() throws Exception {
         String oversized = "{\"blob\":\"" + "x".repeat(500) + "\"}";
 
-        mockMvc.perform(as(post("/api/documents"), tokenFor("alice"))
+        mockMvc.perform(as(post("/api/profiles"), tokenFor("alice"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Too big\",\"payload\":%s}".formatted(oversized)))
                 .andExpect(status().isPayloadTooLarge())
@@ -133,16 +133,20 @@ class JsonDocumentIntegrationTest {
 
     @Test
     void rejectsAnIdThatIsNotAUuid() throws Exception {
-        mockMvc.perform(as(get("/api/documents/{id}", "not-a-uuid"), tokenFor("alice")))
+        mockMvc.perform(as(get("/api/profiles/{id}", "not-a-uuid"), tokenFor("alice")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
     }
 
+    /** The composer needs the shape, not any particular fragment, so that is what is asserted. */
     @Test
     void servesTheTemplateCatalogue() throws Exception {
         mockMvc.perform(as(get("/api/templates"), tokenFor("bob")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.groups[0].id").value("base"))
+                .andExpect(jsonPath("$.groups").isNotEmpty())
+                .andExpect(jsonPath("$.groups[0].required").value(true))
+                .andExpect(jsonPath("$.fragments[0].group").isNotEmpty())
+                .andExpect(jsonPath("$.fragments[0].fields").isArray())
                 .andExpect(jsonPath("$.fragments[0].body").isMap());
     }
 }

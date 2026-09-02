@@ -1,4 +1,4 @@
-package com.nest.jsonstore.document.dto;
+package com.nest.jsonstore.profile.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -6,8 +6,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** A document with its full JSON payload. */
-public record JsonDocumentResponse(
+/** A profile with all of its inputs. */
+public record ProfileResponse(
         UUID id,
         String name,
         String description,

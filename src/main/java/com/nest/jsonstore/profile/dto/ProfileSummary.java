@@ -1,11 +1,11 @@
-package com.nest.jsonstore.document.dto;
+package com.nest.jsonstore.profile.dto;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** A document without its payload — a short preview is sent instead, to keep list responses light. */
-public record JsonDocumentSummary(
+/** A profile without its inputs — a short preview is sent instead, to keep list responses light. */
+public record ProfileSummary(
         UUID id,
         String name,
         String description,

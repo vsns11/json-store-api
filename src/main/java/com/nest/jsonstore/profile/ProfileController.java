@@ -1,10 +1,10 @@
-package com.nest.jsonstore.document;
+package com.nest.jsonstore.profile;
 
-import com.nest.jsonstore.document.dto.JsonDocumentRequest;
-import com.nest.jsonstore.document.dto.JsonDocumentResponse;
-import com.nest.jsonstore.document.dto.JsonDocumentSummary;
-import com.nest.jsonstore.document.dto.PageResponse;
-import com.nest.jsonstore.document.dto.StoreStats;
+import com.nest.jsonstore.profile.dto.ProfileRequest;
+import com.nest.jsonstore.profile.dto.ProfileResponse;
+import com.nest.jsonstore.profile.dto.ProfileSummary;
+import com.nest.jsonstore.profile.dto.PageResponse;
+import com.nest.jsonstore.profile.dto.ProfileStats;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,17 +23,17 @@ import java.net.URI;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/documents")
-class JsonDocumentController {
+@RequestMapping("/api/profiles")
+class ProfileController {
 
-    private final JsonDocumentService service;
+    private final ProfileService service;
 
-    JsonDocumentController(JsonDocumentService service) {
+    ProfileController(ProfileService service) {
         this.service = service;
     }
 
     @GetMapping
-    PageResponse<JsonDocumentSummary> list(
+    PageResponse<ProfileSummary> list(
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -43,23 +43,24 @@ class JsonDocumentController {
     }
 
     @GetMapping("/stats")
-    StoreStats stats() {
+    ProfileStats stats() {
         return service.stats();
     }
 
     @GetMapping("/{id}")
-    JsonDocumentResponse get(@PathVariable UUID id) {
+    ProfileResponse get(@PathVariable UUID id) {
         return service.get(id);
     }
 
     @PostMapping
-    ResponseEntity<JsonDocumentResponse> create(@Valid @RequestBody JsonDocumentRequest request) {
-        JsonDocumentResponse created = service.create(request);
-        return ResponseEntity.created(URI.create("/api/documents/" + created.id())).body(created);
+    ResponseEntity<ProfileResponse> create(@Valid @RequestBody ProfileRequest request) {
+        ProfileResponse created = service.create(request);
+        return ResponseEntity.created(URI.create("/api/profiles/" + created.id())).body(created);
     }
 
+    /** Replaces the whole profile: name, description, tags and inputs. */
     @PutMapping("/{id}")
-    JsonDocumentResponse update(@PathVariable UUID id, @Valid @RequestBody JsonDocumentRequest request) {
+    ProfileResponse update(@PathVariable UUID id, @Valid @RequestBody ProfileRequest request) {
         return service.update(id, request);
     }
 

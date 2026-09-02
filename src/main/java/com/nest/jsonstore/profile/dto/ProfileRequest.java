@@ -1,4 +1,4 @@
-package com.nest.jsonstore.document.dto;
+package com.nest.jsonstore.profile.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotBlank;
@@ -7,10 +7,10 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-/** Payload accepted when creating or updating a document. */
-public record JsonDocumentRequest(
+/** What the client sends when creating or updating a profile. */
+public record ProfileRequest(
 
-        @NotBlank(message = "Name is required")
+        @NotBlank(message = "The profile needs a name")
         @Size(max = 120, message = "Name must be at most 120 characters")
         String name,
 
@@ -19,7 +19,7 @@ public record JsonDocumentRequest(
 
         List<@Size(max = 40, message = "A tag must be at most 40 characters") String> tags,
 
-        @NotNull(message = "A JSON payload is required")
+        @NotNull(message = "The profile needs its inputs")
         JsonNode payload
 ) {
 }

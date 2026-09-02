@@ -1,4 +1,4 @@
-package com.nest.jsonstore.document;
+package com.nest.jsonstore.profile;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.UUID;
 
-public interface JsonDocumentRepository extends JpaRepository<JsonDocument, UUID> {
+public interface ProfileRepository extends JpaRepository<Profile, UUID> {
 
     String SEARCH_PREDICATE = """
             where cast(:search as text) is null
@@ -19,15 +19,15 @@ public interface JsonDocumentRepository extends JpaRepository<JsonDocument, UUID
                or d.payload::text ilike '%' || cast(:search as text) || '%'
             """;
 
-    /** Free-text search over name, description, tags and the JSON payload itself. */
-    @Query(value = "select d.* from json_document d " + SEARCH_PREDICATE,
-            countQuery = "select count(*) from json_document d " + SEARCH_PREDICATE,
+    /** Free-text search over the name, the description, the tags and the inputs themselves. */
+    @Query(value = "select d.* from profile d " + SEARCH_PREDICATE,
+            countQuery = "select count(*) from profile d " + SEARCH_PREDICATE,
             nativeQuery = true)
-    Page<JsonDocument> search(@Param("search") String search, Pageable pageable);
+    Page<Profile> search(@Param("search") String search, Pageable pageable);
 
-    @Query("select coalesce(sum(d.sizeBytes), 0) from JsonDocument d")
+    @Query("select coalesce(sum(p.sizeBytes), 0) from Profile p")
     long totalBytes();
 
-    @Query("select max(d.updatedAt) from JsonDocument d")
+    @Query("select max(p.updatedAt) from Profile p")
     Instant lastUpdatedAt();
 }

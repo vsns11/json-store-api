@@ -1,151 +1,190 @@
 {
   "version": 1,
   "groups": [
-    { "id": "base", "label": "Base template", "required": true, "help": "The shape everything else is merged into" },
-    { "id": "datastore", "label": "Datastore" },
-    { "id": "cache", "label": "Cache" },
-    { "id": "messaging", "label": "Messaging" },
-    { "id": "observability", "label": "Observability" }
+    { "id": "scenario", "label": "Scenario", "required": true, "help": "What the test is exercising" },
+    { "id": "customer", "label": "Customer" },
+    { "id": "payment", "label": "Payment" },
+    { "id": "delivery", "label": "Delivery" },
+    { "id": "expectations", "label": "Expected outcome" }
   ],
   "fragments": [
     {
-      "id": "microservice",
-      "group": "base",
-      "name": "Microservice",
-      "description": "A long-running HTTP service",
+      "id": "checkout",
+      "group": "scenario",
+      "name": "Checkout",
+      "description": "One basket taken through to payment",
       "fields": [
-        { "key": "serviceName", "label": "Service name", "type": "text", "default": "orders-api", "required": true },
-        { "key": "image", "label": "Container image", "type": "text", "default": "ghcr.io/acme/orders-api:1.0.0" },
-        { "key": "replicas", "label": "Replicas", "type": "number", "default": 3 },
-        { "key": "environment", "label": "Environment", "type": "select", "options": ["dev", "staging", "prod"], "default": "prod" },
-        { "key": "publicApi", "label": "Publicly routable", "type": "boolean", "default": true }
+        { "key": "scenarioName", "label": "Scenario name", "type": "text", "default": "Checkout — happy path", "required": true },
+        { "key": "environment", "label": "Environment", "type": "select", "options": ["local", "dev", "staging", "prod-mirror"], "default": "staging" },
+        { "key": "currency", "label": "Currency", "type": "select", "options": ["EUR", "GBP", "USD", "INR"], "default": "EUR" },
+        { "key": "sku", "label": "Item SKU", "type": "text", "default": "NEST-01" },
+        { "key": "quantity", "label": "Quantity", "type": "number", "default": 1 },
+        { "key": "unitPriceMinor", "label": "Unit price (minor units)", "type": "number", "default": 4999 }
       ],
       "body": {
-        "kind": "microservice",
-        "metadata": { "name": "${serviceName}", "environment": "${environment}" },
-        "spec": {
-          "image": "${image}",
-          "replicas": "${replicas}",
-          "port": 8080,
-          "public": "${publicApi}",
-          "healthcheck": { "path": "/actuator/health", "intervalSeconds": 10 }
+        "scenario": "checkout",
+        "name": "${scenarioName}",
+        "environment": "${environment}",
+        "basket": {
+          "currency": "${currency}",
+          "lines": [{ "sku": "${sku}", "quantity": "${quantity}", "unitPriceMinor": "${unitPriceMinor}" }]
         }
       }
     },
     {
-      "id": "batch-job",
-      "group": "base",
-      "name": "Batch job",
-      "description": "A scheduled job that runs to completion",
+      "id": "bulk-import",
+      "group": "scenario",
+      "name": "Bulk import",
+      "description": "A file pushed through the importer",
       "fields": [
-        { "key": "serviceName", "label": "Job name", "type": "text", "default": "nightly-reconcile", "required": true },
-        { "key": "image", "label": "Container image", "type": "text", "default": "ghcr.io/acme/reconcile:1.0.0" },
-        { "key": "schedule", "label": "Schedule (cron)", "type": "text", "default": "0 2 * * *" },
-        { "key": "environment", "label": "Environment", "type": "select", "options": ["dev", "staging", "prod"], "default": "prod" },
-        { "key": "timeoutMinutes", "label": "Timeout (minutes)", "type": "number", "default": 30 }
+        { "key": "scenarioName", "label": "Scenario name", "type": "text", "default": "Bulk import — 10k rows", "required": true },
+        { "key": "environment", "label": "Environment", "type": "select", "options": ["local", "dev", "staging", "prod-mirror"], "default": "staging" },
+        { "key": "sourceKey", "label": "Source file", "type": "text", "default": "2026-09-01/orders.csv" },
+        { "key": "rows", "label": "Rows", "type": "number", "default": 10000 },
+        { "key": "batchSize", "label": "Batch size", "type": "number", "default": 500 },
+        { "key": "stopOnError", "label": "Stop on first error", "type": "boolean", "default": false }
       ],
       "body": {
-        "kind": "batch-job",
-        "metadata": { "name": "${serviceName}", "environment": "${environment}" },
-        "spec": {
-          "image": "${image}",
-          "schedule": "${schedule}",
-          "timeoutMinutes": "${timeoutMinutes}",
-          "retries": 2
-        }
+        "scenario": "bulk-import",
+        "name": "${scenarioName}",
+        "environment": "${environment}",
+        "source": { "bucket": "acme-imports", "key": "${sourceKey}" },
+        "batch": { "rows": "${rows}", "size": "${batchSize}", "stopOnError": "${stopOnError}" }
       }
     },
     {
-      "id": "postgres",
-      "group": "datastore",
-      "name": "PostgreSQL",
-      "description": "Managed PostgreSQL with a connection pool",
+      "id": "subscription-renewal",
+      "group": "scenario",
+      "name": "Subscription renewal",
+      "description": "A renewal charged on its due date",
       "fields": [
-        { "key": "dbHost", "label": "Host", "type": "text", "default": "postgres.internal" },
-        { "key": "dbName", "label": "Database", "type": "text", "default": "orders" },
-        { "key": "dbPoolMax", "label": "Pool size", "type": "number", "default": 16 }
+        { "key": "scenarioName", "label": "Scenario name", "type": "text", "default": "Renewal — card on file", "required": true },
+        { "key": "environment", "label": "Environment", "type": "select", "options": ["local", "dev", "staging", "prod-mirror"], "default": "staging" },
+        { "key": "planCode", "label": "Plan", "type": "text", "default": "PRO-MONTHLY" },
+        { "key": "renewalDate", "label": "Renewal date", "type": "text", "default": "2026-10-01" }
       ],
       "body": {
-        "dependencies": {
-          "database": {
-            "engine": "postgresql",
-            "host": "${dbHost}",
-            "name": "${dbName}",
-            "pool": { "max": "${dbPoolMax}", "idleTimeoutSeconds": 300 }
-          }
-        }
+        "scenario": "subscription-renewal",
+        "name": "${scenarioName}",
+        "environment": "${environment}",
+        "subscription": { "plan": "${planCode}", "renewsOn": "${renewalDate}", "autoRenew": true }
       }
     },
     {
-      "id": "mysql",
-      "group": "datastore",
-      "name": "MySQL",
-      "description": "Managed MySQL with a connection pool",
+      "id": "returning-customer",
+      "group": "customer",
+      "name": "Returning customer",
+      "description": "An account with order history",
       "fields": [
-        { "key": "dbHost", "label": "Host", "type": "text", "default": "mysql.internal" },
-        { "key": "dbName", "label": "Database", "type": "text", "default": "orders" },
-        { "key": "dbPoolMax", "label": "Pool size", "type": "number", "default": 12 }
+        { "key": "customerId", "label": "Customer id", "type": "text", "default": "cus_1042" },
+        { "key": "country", "label": "Country", "type": "select", "options": ["NL", "GB", "DE", "US", "IN"], "default": "NL" },
+        { "key": "loyaltyTier", "label": "Loyalty tier", "type": "select", "options": ["none", "silver", "gold"], "default": "gold" }
       ],
       "body": {
-        "dependencies": {
-          "database": {
-            "engine": "mysql",
-            "host": "${dbHost}",
-            "name": "${dbName}",
-            "pool": { "max": "${dbPoolMax}" }
-          }
-        }
+        "customer": { "type": "returning", "id": "${customerId}", "country": "${country}", "loyaltyTier": "${loyaltyTier}" }
       }
     },
     {
-      "id": "redis",
-      "group": "cache",
-      "name": "Redis",
-      "description": "Shared cache with a default TTL",
+      "id": "new-customer",
+      "group": "customer",
+      "name": "New customer",
+      "description": "First order, no history",
       "fields": [
-        { "key": "redisHost", "label": "Host", "type": "text", "default": "redis.internal" },
-        { "key": "cacheTtlSeconds", "label": "Default TTL (seconds)", "type": "number", "default": 300 }
+        { "key": "country", "label": "Country", "type": "select", "options": ["NL", "GB", "DE", "US", "IN"], "default": "GB" },
+        { "key": "marketingOptIn", "label": "Marketing opt-in", "type": "boolean", "default": false }
       ],
       "body": {
-        "dependencies": {
-          "cache": { "engine": "redis", "host": "${redisHost}", "ttlSeconds": "${cacheTtlSeconds}" }
-        }
+        "customer": { "type": "new", "country": "${country}", "marketingOptIn": "${marketingOptIn}" }
       }
     },
     {
-      "id": "kafka",
-      "group": "messaging",
-      "name": "Kafka",
-      "description": "Produces to one topic",
+      "id": "card-approved",
+      "group": "payment",
+      "name": "Card — approved",
+      "description": "The card clears first time",
       "fields": [
-        { "key": "brokers", "label": "Bootstrap servers", "type": "text", "default": "kafka-1:9092,kafka-2:9092" },
-        { "key": "topic", "label": "Topic", "type": "text", "default": "orders.events" },
-        { "key": "partitions", "label": "Partitions", "type": "number", "default": 12 }
+        { "key": "cardBrand", "label": "Card brand", "type": "select", "options": ["visa", "mastercard", "amex"], "default": "visa" },
+        { "key": "cardLast4", "label": "Last four digits", "type": "text", "default": "4242" }
       ],
       "body": {
-        "dependencies": {
-          "messaging": {
-            "engine": "kafka",
-            "brokers": "${brokers}",
-            "topics": [{ "name": "${topic}", "partitions": "${partitions}", "retentionHours": 168 }]
-          }
-        }
+        "payment": { "method": "card", "brand": "${cardBrand}", "last4": "${cardLast4}", "outcome": "approved" }
       }
     },
     {
-      "id": "prometheus",
-      "group": "observability",
-      "name": "Prometheus and structured logs",
-      "description": "Scrape config and a log level",
+      "id": "card-declined",
+      "group": "payment",
+      "name": "Card — declined",
+      "description": "The issuer refuses the charge",
       "fields": [
-        { "key": "scrapeIntervalSeconds", "label": "Scrape interval (seconds)", "type": "number", "default": 15 },
-        { "key": "logLevel", "label": "Log level", "type": "select", "options": ["debug", "info", "warn", "error"], "default": "info" }
+        { "key": "cardBrand", "label": "Card brand", "type": "select", "options": ["visa", "mastercard", "amex"], "default": "visa" },
+        { "key": "declineCode", "label": "Decline code", "type": "select", "options": ["expired_card", "insufficient_funds", "do_not_honour"], "default": "expired_card" }
       ],
       "body": {
-        "observability": {
-          "metrics": { "enabled": true, "path": "/actuator/prometheus", "scrapeIntervalSeconds": "${scrapeIntervalSeconds}" },
-          "logs": { "format": "json", "level": "${logLevel}" }
-        }
+        "payment": { "method": "card", "brand": "${cardBrand}", "outcome": "declined", "declineCode": "${declineCode}" }
+      }
+    },
+    {
+      "id": "bank-transfer",
+      "group": "payment",
+      "name": "Bank transfer",
+      "description": "Paid out of band, settles later",
+      "fields": [
+        { "key": "bankScheme", "label": "Scheme", "type": "select", "options": ["ideal", "sepa", "faster-payments"], "default": "ideal" },
+        { "key": "settlementDelayHours", "label": "Settlement delay (hours)", "type": "number", "default": 24 }
+      ],
+      "body": {
+        "payment": { "method": "bank-transfer", "scheme": "${bankScheme}", "settlementDelayHours": "${settlementDelayHours}" }
+      }
+    },
+    {
+      "id": "standard-shipping",
+      "group": "delivery",
+      "name": "Standard shipping",
+      "description": "Delivered to the billing address",
+      "fields": [
+        { "key": "carrier", "label": "Carrier", "type": "select", "options": ["postnl", "dhl", "ups"], "default": "postnl" },
+        { "key": "promisedDays", "label": "Promised days", "type": "number", "default": 3 }
+      ],
+      "body": {
+        "delivery": { "mode": "standard", "carrier": "${carrier}", "promisedDays": "${promisedDays}" }
+      }
+    },
+    {
+      "id": "pickup-point",
+      "group": "delivery",
+      "name": "Pickup point",
+      "description": "Collected from a shop",
+      "fields": [
+        { "key": "pickupPointId", "label": "Pickup point id", "type": "text", "default": "pp-8841" }
+      ],
+      "body": {
+        "delivery": { "mode": "pickup", "pointId": "${pickupPointId}" }
+      }
+    },
+    {
+      "id": "expect-success",
+      "group": "expectations",
+      "name": "Expect success",
+      "description": "The run should finish cleanly",
+      "fields": [
+        { "key": "expectedStatus", "label": "Expected status", "type": "text", "default": "paid" },
+        { "key": "expectedEmail", "label": "Expected email", "type": "text", "default": "order-confirmation" }
+      ],
+      "body": {
+        "expected": { "outcome": "success", "status": "${expectedStatus}", "emails": ["${expectedEmail}"] }
+      }
+    },
+    {
+      "id": "expect-failure",
+      "group": "expectations",
+      "name": "Expect failure",
+      "description": "The run should stop with an error",
+      "fields": [
+        { "key": "expectedStatus", "label": "Expected status", "type": "text", "default": "payment_failed" },
+        { "key": "expectedError", "label": "Expected error code", "type": "text", "default": "card_declined" }
+      ],
+      "body": {
+        "expected": { "outcome": "failure", "status": "${expectedStatus}", "error": "${expectedError}", "emails": [] }
       }
     }
   ]

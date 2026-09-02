@@ -22,8 +22,8 @@ class ApiExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
-    @ExceptionHandler(DocumentNotFoundException.class)
-    ResponseEntity<ApiError> handleNotFound(DocumentNotFoundException e) {
+    @ExceptionHandler(ProfileNotFoundException.class)
+    ResponseEntity<ApiError> handleNotFound(ProfileNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiError.of(404, "Not found", e.getMessage()));
     }
@@ -88,7 +88,7 @@ class ApiExceptionHandler {
     @ExceptionHandler(OptimisticLockingFailureException.class)
     ResponseEntity<ApiError> handleConflict(OptimisticLockingFailureException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiError.of(409, "Conflict", "This document was changed elsewhere — reload it and try again"));
+                .body(ApiError.of(409, "Conflict", "This profile was changed elsewhere — reload it and try again"));
     }
 
     @ExceptionHandler(Exception.class)

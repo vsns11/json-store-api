@@ -1,9 +1,9 @@
-package com.nest.jsonstore.document;
+package com.nest.jsonstore.profile;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nest.jsonstore.config.CorsProperties;
-import com.nest.jsonstore.document.dto.JsonDocumentResponse;
-import com.nest.jsonstore.error.DocumentNotFoundException;
+import com.nest.jsonstore.profile.dto.ProfileResponse;
+import com.nest.jsonstore.error.ProfileNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -27,11 +27,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // A pure controller slice: authentication is covered by the integration test instead.
-@WebMvcTest(JsonDocumentController.class)
+@WebMvcTest(ProfileController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @EnableConfigurationProperties(CorsProperties.class)
 @EnableAutoConfiguration(exclude = org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration.class)
-class JsonDocumentControllerTest {
+class ProfileControllerTest {
 
     @Autowired
     MockMvc mockMvc;
@@ -40,16 +40,16 @@ class JsonDocumentControllerTest {
     ObjectMapper objectMapper;
 
     @MockitoBean
-    JsonDocumentService service;
+    ProfileService service;
 
     @Test
-    void createsDocument() throws Exception {
+    void createsProfile() throws Exception {
         UUID id = UUID.randomUUID();
-        given(service.create(any())).willReturn(new JsonDocumentResponse(
+        given(service.create(any())).willReturn(new ProfileResponse(
                 id, "Config", null, List.of("infra"), objectMapper.readTree("{\"a\":1}"), 7, 0,
                 Instant.EPOCH, Instant.EPOCH));
 
-        mockMvc.perform(post("/api/documents")
+        mockMvc.perform(post("/api/profiles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Config\",\"tags\":[\"infra\"],\"payload\":{\"a\":1}}"))
                 .andExpect(status().isCreated())
@@ -58,8 +58,8 @@ class JsonDocumentControllerTest {
     }
 
     @Test
-    void rejectsDocumentWithoutName() throws Exception {
-        mockMvc.perform(post("/api/documents")
+    void rejectsProfileWithoutName() throws Exception {
+        mockMvc.perform(post("/api/profiles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"payload\":{\"a\":1}}"))
                 .andExpect(status().isBadRequest())
@@ -69,7 +69,7 @@ class JsonDocumentControllerTest {
 
     @Test
     void reportsWhereMalformedJsonBreaks() throws Exception {
-        mockMvc.perform(post("/api/documents")
+        mockMvc.perform(post("/api/profiles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Broken\",\"payload\":{\"a\":}}"))
                 .andExpect(status().isBadRequest())
@@ -80,9 +80,9 @@ class JsonDocumentControllerTest {
     @Test
     void returnsNotFoundForUnknownId() throws Exception {
         UUID id = UUID.randomUUID();
-        willThrow(new DocumentNotFoundException(id)).given(service).get(id);
+        willThrow(new ProfileNotFoundException(id)).given(service).get(id);
 
-        mockMvc.perform(get("/api/documents/{id}", id))
+        mockMvc.perform(get("/api/profiles/{id}", id))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }

@@ -1,16 +1,17 @@
 # JSON Store API
 
-Stores JSON documents in PostgreSQL, in a native `jsonb` column. Stateless Spring Boot service, built to
-run as several replicas behind a load balancer.
+Stores test-scenario profiles in PostgreSQL — a profile being a named set of inputs a scenario runs
+with, held in a native `jsonb` column. Stateless Spring Boot service, built to run as several replicas
+behind a load balancer.
 
 The web client lives in its own repository (`json-store-web`) and talks to this over HTTP. Nothing here
 depends on it.
 
 ```
 src/main/java/com/nest/jsonstore/
-├── document/   entity, repository, service, controller, DTOs
+├── profile/    entity, repository, service, controller, DTOs
 ├── security/   LDAP sign-in, token issuing, authorisation rules
-├── template/   the catalogue of JSON fragments the composer offers
+├── template/   the catalogue of input fragments the composer merges
 ├── config/     limits, request-id filter, ETag filter
 └── error/      one error shape for the whole API
 src/main/resources/
@@ -36,7 +37,7 @@ createdb jsonstore && ./mvnw spring-boot:run
 ```
 
 It defaults to `localhost:5432/jsonstore` with your OS username and an empty password, which is what a
-stock Homebrew PostgreSQL gives you, and seeds three example documents into an empty database (never
+stock Homebrew PostgreSQL gives you, and seeds three example profiles into an empty database (never
 under the `prod` profile).
 
 ## Authentication
@@ -45,7 +46,7 @@ Users sign in against LDAP. The bind happens once, at `POST /api/auth/login`; ev
 carries a short-lived bearer token, so no session is kept and any replica can serve any request.
 
 Group membership in the directory becomes a role — `cn=admins` becomes `ROLE_ADMINS` — and deleting a
-document requires it. Everything else needs only a valid token.
+profile requires it. Everything else needs only a valid token.
 
 **Locally there is nothing to install.** Outside the `prod` profile an in-process LDAP server starts with
 the directory in `src/main/resources/ldap/users.ldif`:
@@ -61,7 +62,7 @@ with the same two accounts, which is closer to what production does.
 ```bash
 TOKEN=$(curl -s localhost:8080/api/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"alice","password":"secret"}' | jq -r .token)
-curl -s localhost:8080/api/documents -H "Authorization: Bearer $TOKEN"
+curl -s localhost:8080/api/profiles -H "Authorization: Bearer $TOKEN"
 ```
 
 To point at a corporate directory, set `LDAP_URL` and the DN patterns below; nothing else changes.
@@ -86,7 +87,7 @@ To point at a corporate directory, set `LDAP_URL` and the DN patterns below; not
 | `LDAP_GROUP_SEARCH_BASE` `LDAP_GROUP_SEARCH_FILTER` | `ou=groups`, `(member={0})` | Membership becomes a role |
 | `JWT_SECRET` | dev default | Required under `prod`; at least 32 characters |
 | `JWT_TTL` | `PT8H` | How long a sign-in lasts |
-| `SEED_EXAMPLES` | `true` | Example documents for an empty DB; ignored under `prod` |
+| `SEED_EXAMPLES` | `true` | Example profiles for an empty DB; ignored under `prod` |
 
 ## API
 
@@ -96,18 +97,19 @@ All endpoints need a bearer token except `POST /api/auth/login`.
 | --- | --- | --- |
 | `POST` | `/api/auth/login` | `{username, password}` — binds to LDAP, returns a token and roles |
 | `GET` | `/api/auth/me` | Who the token belongs to |
-| `GET` | `/api/templates` | The catalogue of JSON fragments the composer merges |
-| `GET` | `/api/documents` | `search`, `page`, `size`, `sort`, `direction`; returns summaries |
-| `GET` | `/api/documents/stats` | Document count, total bytes, last write |
-| `GET` | `/api/documents/{id}` | One document including its payload |
-| `POST` | `/api/documents` | Create · `201` with the stored document |
-| `PUT` | `/api/documents/{id}` | Replace name, description, tags and payload |
-| `DELETE` | `/api/documents/{id}` | `204` — requires the admins group |
+| `GET` | `/api/templates` | The catalogue of input fragments the composer merges |
+| `GET` | `/api/profiles` | `search`, `page`, `size`, `sort`, `direction`; returns summaries |
+| `GET` | `/api/profiles/stats` | Profile count, total input bytes, last change |
+| `GET` | `/api/profiles/{id}` | One profile including its inputs |
+| `POST` | `/api/profiles` | Create · `201` with the stored profile |
+| `PUT` | `/api/profiles/{id}` | Replace name, description, tags and inputs |
+| `DELETE` | `/api/profiles/{id}` | `204` — requires the admins group |
 
 ```bash
-curl -s localhost:8080/api/documents -H "Authorization: Bearer $TOKEN" \
+curl -s localhost:8080/api/profiles -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Hello","tags":["demo"],"payload":{"greeting":"hi","items":[1,2,3]}}'
+  -d '{"name":"Checkout — gift card","tags":["checkout"],
+       "payload":{"scenario":"checkout","payment":{"method":"gift-card"},"expected":{"status":"paid"}}}'
 ```
 
 Errors always come back in one shape, and JSON syntax errors carry the position that broke:
@@ -122,12 +124,13 @@ Errors always come back in one shape, and JSON syntax errors carry the position 
 }
 ```
 
-Because the payload is `jsonb`, you can query inside it from SQL:
+Because the inputs are `jsonb`, you can query inside them from SQL — which profiles expect a
+particular outcome, for instance:
 
 ```sql
-select name, payload -> 'rollout' ->> 'percentage' as pct
-from json_document
-where payload @> '{"checkout.newFlow": true}';
+select name, payload -> 'expected' ->> 'status' as expected_status
+from profile
+where payload @> '{"scenario": "checkout"}';
 ```
 
 ## Deploying to OpenShift
@@ -190,16 +193,17 @@ Stateless, so throughput scales with replicas. What actually needs attention as 
 A controller slice covers validation, malformed-JSON reporting and unknown ids with no database. An
 integration test runs the real stack against a PostgreSQL started by Testcontainers and the in-process
 directory, checking sign-in, the roles that come from LDAP groups (bob cannot delete, alice can), the
-migrations, the `jsonb` mapping, payload-inclusive search, the size limit and the template catalogue —
+migrations, the `jsonb` mapping, input-inclusive search, the size limit and the template catalogue —
 so that one needs a Docker daemon.
 
 ## Template catalogue
 
-`GET /api/templates` returns `src/main/resources/templates/catalog.json`: fragment definitions grouped
-into base templates and optional modules, each with the fields it needs and a body containing
-`${field}` placeholders. The browser merges the chosen fragments — objects deeply, lists by appending —
-substitutes the values, and stores the result as one document. A string that is exactly one placeholder
-keeps the field's type, so `"replicas": "${replicas}"` is stored as a number.
+`GET /api/templates` returns `src/main/resources/templates/catalog.json`: fragments grouped into a
+required scenario and optional customer, payment, delivery and expectation modules, each with the fields
+it needs and a body containing `${field}` placeholders. The browser merges the chosen fragments —
+objects deeply, lists by appending — substitutes the values, and stores the result as one profile. A
+string that is exactly one placeholder keeps the field's type, so `"quantity": "${quantity}"` is stored
+as a number.
 
 Editing the catalogue is a config change, not a code change; a malformed catalogue fails startup rather
 than a user's first click.

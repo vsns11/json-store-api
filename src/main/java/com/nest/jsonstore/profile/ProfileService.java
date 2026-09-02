@@ -1,12 +1,12 @@
-package com.nest.jsonstore.document;
+package com.nest.jsonstore.profile;
 
 import com.nest.jsonstore.config.LimitsProperties;
-import com.nest.jsonstore.document.dto.JsonDocumentRequest;
-import com.nest.jsonstore.document.dto.JsonDocumentResponse;
-import com.nest.jsonstore.document.dto.JsonDocumentSummary;
-import com.nest.jsonstore.document.dto.PageResponse;
-import com.nest.jsonstore.document.dto.StoreStats;
-import com.nest.jsonstore.error.DocumentNotFoundException;
+import com.nest.jsonstore.profile.dto.ProfileRequest;
+import com.nest.jsonstore.profile.dto.ProfileResponse;
+import com.nest.jsonstore.profile.dto.ProfileSummary;
+import com.nest.jsonstore.profile.dto.PageResponse;
+import com.nest.jsonstore.profile.dto.ProfileStats;
+import com.nest.jsonstore.error.ProfileNotFoundException;
 import com.nest.jsonstore.error.PayloadTooLargeException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,7 +22,7 @@ import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
-public class JsonDocumentService {
+public class ProfileService {
 
     /** API sort keys mapped onto real columns, so the sort parameter can never reach SQL unchecked. */
     private static final Map<String, String> SORT_COLUMNS = Map.of(
@@ -31,71 +31,71 @@ public class JsonDocumentService {
             "updatedAt", "updated_at",
             "sizeBytes", "size_bytes");
 
-    private final JsonDocumentRepository repository;
-    private final JsonDocumentMapper mapper;
+    private final ProfileRepository repository;
+    private final ProfileMapper mapper;
     private final LimitsProperties limits;
 
-    JsonDocumentService(JsonDocumentRepository repository, JsonDocumentMapper mapper, LimitsProperties limits) {
+    ProfileService(ProfileRepository repository, ProfileMapper mapper, LimitsProperties limits) {
         this.repository = repository;
         this.mapper = mapper;
         this.limits = limits;
     }
 
-    public PageResponse<JsonDocumentSummary> list(String search, int page, int size, String sort, String direction) {
+    public PageResponse<ProfileSummary> list(String search, int page, int size, String sort, String direction) {
         return PageResponse.of(
                 repository.search(StringUtils.hasText(search) ? search.trim() : null, pageable(page, size, sort, direction)),
                 mapper::toSummary);
     }
 
-    public JsonDocumentResponse get(UUID id) {
+    public ProfileResponse get(UUID id) {
         return repository.findById(id)
                 .map(mapper::toResponse)
-                .orElseThrow(() -> new DocumentNotFoundException(id));
+                .orElseThrow(() -> new ProfileNotFoundException(id));
     }
 
     @Transactional
-    public JsonDocumentResponse create(JsonDocumentRequest request) {
-        JsonDocument document = new JsonDocument(
+    public ProfileResponse create(ProfileRequest request) {
+        Profile profile = new Profile(
                 request.name().trim(),
                 trimToNull(request.description()),
                 normalizeTags(request.tags()),
                 request.payload(),
                 checkedSize(request));
         // Flush so the generated id, timestamps and version are in the entity before it is mapped.
-        return mapper.toResponse(repository.saveAndFlush(document));
+        return mapper.toResponse(repository.saveAndFlush(profile));
     }
 
     @Transactional
-    public JsonDocumentResponse update(UUID id, JsonDocumentRequest request) {
-        JsonDocument document = repository.findById(id).orElseThrow(() -> new DocumentNotFoundException(id));
-        document.apply(
+    public ProfileResponse update(UUID id, ProfileRequest request) {
+        Profile profile = repository.findById(id).orElseThrow(() -> new ProfileNotFoundException(id));
+        profile.apply(
                 request.name().trim(),
                 trimToNull(request.description()),
                 normalizeTags(request.tags()),
                 request.payload(),
                 checkedSize(request));
         // Flush so the generated id, timestamps and version are in the entity before it is mapped.
-        return mapper.toResponse(repository.saveAndFlush(document));
+        return mapper.toResponse(repository.saveAndFlush(profile));
     }
 
     @Transactional
     public void delete(UUID id) {
         if (!repository.existsById(id)) {
-            throw new DocumentNotFoundException(id);
+            throw new ProfileNotFoundException(id);
         }
         repository.deleteById(id);
     }
 
-    public StoreStats stats() {
-        return new StoreStats(repository.count(), repository.totalBytes(), lastUpdatedAt());
+    public ProfileStats stats() {
+        return new ProfileStats(repository.count(), repository.totalBytes(), lastUpdatedAt());
     }
 
     private Instant lastUpdatedAt() {
         return repository.count() == 0 ? null : repository.lastUpdatedAt();
     }
 
-    /** Sizes the payload once and refuses anything over the configured limit. */
-    private int checkedSize(JsonDocumentRequest request) {
+    /** Sizes the inputs once and refuses anything over the configured limit. */
+    private int checkedSize(ProfileRequest request) {
         int size = mapper.sizeOf(request.payload());
         if (size > limits.maxPayloadBytes()) {
             throw new PayloadTooLargeException(size, limits.maxPayloadBytes());

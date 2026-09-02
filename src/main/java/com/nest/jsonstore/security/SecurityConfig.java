@@ -73,8 +73,8 @@ class SecurityConfig {
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
-                        // Deleting is reserved for the admin group in the directory.
-                        .requestMatchers(HttpMethod.DELETE, "/api/documents/**").hasRole("ADMINS")
+                        // Deleting a profile is reserved for the admin group in the directory.
+                        .requestMatchers(HttpMethod.DELETE, "/api/profiles/**").hasRole("ADMINS")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .build();

@@ -1,4 +1,4 @@
-package com.nest.jsonstore.document;
+package com.nest.jsonstore.profile;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.Column;
@@ -17,11 +17,12 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * A single JSON document, stored in a native PostgreSQL {@code jsonb} column.
+ * One test-scenario profile: a name, and the inputs that scenario runs with. The inputs are held in
+ * a native PostgreSQL {@code jsonb} column, so they can be queried without being parsed first.
  */
 @Entity
-@Table(name = "json_document")
-public class JsonDocument {
+@Table(name = "profile")
+public class Profile {
 
     @Id
     @GeneratedValue
@@ -56,11 +57,11 @@ public class JsonDocument {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected JsonDocument() {
+    protected Profile() {
         // for JPA
     }
 
-    public JsonDocument(String name, String description, List<String> tags, JsonNode payload, int sizeBytes) {
+    public Profile(String name, String description, List<String> tags, JsonNode payload, int sizeBytes) {
         apply(name, description, tags, payload, sizeBytes);
     }
 
