@@ -229,20 +229,44 @@ docker build -t json-store-api:1.0.0 \
 
 ## Scaling
 
-Stateless, so throughput scales with replicas. What actually needs attention as you add them:
+Stateless, so throughput scales with replicas. These are measured numbers, not estimates: 100,000
+profiles (95 MB of jsonb) on a laptop container, timed end to end through the API.
 
+| Request | Time |
+| --- | --- |
+| First page of the list | 10 ms |
+| One profile by id | 12 ms |
+| Search matching one row | 8 ms |
+| Search matching 200 rows | 41 ms |
+| Search matching 33,000 rows | 144 ms |
+| Sort by name or size | 18 ms |
+| Page 5,000 (offset 75,000) | 19 ms |
+| Store statistics | 25 ms |
+
+What matters as the store or the traffic grows:
+
+- **Search is the one query with real cost.** It reads the name, description, tags and inputs, and is
+  served by a trigram index (migration V4). Without it, a search matching a single row took 455 ms at
+  100k because every row had to be read; with it, 8 ms. Broad terms are still linear in the number of
+  matches — 144 ms for a term matching a third of the table — because the total has to be counted for
+  the page footer. Terms shorter than three characters cannot use a trigram index and fall back to a
+  scan (~140 ms).
+- **The index costs writes and disk.** About 33 MB per 100k profiles, and every insert or update
+  maintains it. This store is read-heavy, so that is the right trade; if it ever is not, drop
+  `idx_profile_search` and searches go back to scanning.
 - **Connections, not CPU, are the first ceiling.** Total connections = replicas × `DB_POOL_MAX`. Keep
   that under PostgreSQL's `max_connections`, or put PgBouncer in front in transaction pooling mode.
 - **Reads dominate.** Every list and search is a read-only transaction and can go to read replicas.
-- **Search is indexed.** The payload has a `jsonb_path_ops` GIN index for containment queries. Free-text
-  search uses `ILIKE` across name, description, tags and payload text, which holds up into the hundreds
-  of thousands of rows — past that, move to a `tsvector` column with its own GIN index.
-- **Deep pagination degrades.** Offset paging is fine for browsing; for very deep pages switch the list
-  query to keyset pagination on `(updated_at, id)`.
+- **Offset paging holds up further than expected** — page 5,000 costs 19 ms. It grows linearly with the
+  offset, so if you ever expose millions of rows, move the list query to keyset pagination on
+  `(updated_at, id)`.
 - **Graceful shutdown** drains for 25s and the pod sleeps 5s before it starts, so rolling deploys drop
   no requests.
 - **Migrations** run on startup and are serialised by Flyway's schema lock, so concurrent replicas are
   safe. For stricter change control, run them as a release step and set `FLYWAY_ENABLED=false`.
+
+The browser side does not care how many profiles exist: it asks for 15 at a time and renders about 500
+DOM nodes whether the store holds 7 rows or 100,000.
 
 ## Tests
 

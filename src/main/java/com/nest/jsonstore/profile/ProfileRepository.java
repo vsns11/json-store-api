@@ -11,17 +11,19 @@ import java.util.UUID;
 
 public interface ProfileRepository extends JpaRepository<Profile, UUID> {
 
+    /**
+     * One expression rather than four ORs, so the trigram index from V4 can serve it. Keep it
+     * identical to the index definition, or PostgreSQL will fall back to scanning every row.
+     */
     String SEARCH_PREDICATE = """
             where cast(:search as text) is null
-               or d.name ilike '%' || cast(:search as text) || '%'
-               or coalesce(d.description, '') ilike '%' || cast(:search as text) || '%'
-               or d.tags::text ilike '%' || cast(:search as text) || '%'
-               or d.payload::text ilike '%' || cast(:search as text) || '%'
+               or (p.name || ' ' || coalesce(p.description, '') || ' ' || p.tags::text || ' ' || p.payload::text)
+                   ilike '%' || cast(:search as text) || '%'
             """;
 
     /** Free-text search over the name, the description, the tags and the inputs themselves. */
-    @Query(value = "select d.* from profile d " + SEARCH_PREDICATE,
-            countQuery = "select count(*) from profile d " + SEARCH_PREDICATE,
+    @Query(value = "select p.* from profile p " + SEARCH_PREDICATE,
+            countQuery = "select count(*) from profile p " + SEARCH_PREDICATE,
             nativeQuery = true)
     Page<Profile> search(@Param("search") String search, Pageable pageable);
 
