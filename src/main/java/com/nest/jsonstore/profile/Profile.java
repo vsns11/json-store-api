@@ -45,6 +45,11 @@ public class Profile {
     @Column(name = "size_bytes", nullable = false)
     private int sizeBytes;
 
+    /** The template selection this was composed from, or null if the inputs were written by hand. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private JsonNode template;
+
     @Version
     @Column(nullable = false)
     private long version;
@@ -61,17 +66,20 @@ public class Profile {
         // for JPA
     }
 
-    public Profile(String name, String description, List<String> tags, JsonNode payload, int sizeBytes) {
-        apply(name, description, tags, payload, sizeBytes);
+    public Profile(String name, String description, List<String> tags, JsonNode payload, int sizeBytes,
+                   JsonNode template) {
+        apply(name, description, tags, payload, sizeBytes, template);
     }
 
-    /** Applies the mutable part of the document in one shot, so callers cannot leave it half-updated. */
-    public void apply(String name, String description, List<String> tags, JsonNode payload, int sizeBytes) {
+    /** Applies the mutable part of the profile in one shot, so callers cannot leave it half-updated. */
+    public void apply(String name, String description, List<String> tags, JsonNode payload, int sizeBytes,
+                      JsonNode template) {
         this.name = name;
         this.description = description;
         this.tags = tags == null ? List.of() : List.copyOf(tags);
         this.payload = payload;
         this.sizeBytes = sizeBytes;
+        this.template = template;
     }
 
     public UUID getId() {
@@ -96,6 +104,10 @@ public class Profile {
 
     public int getSizeBytes() {
         return sizeBytes;
+    }
+
+    public JsonNode getTemplate() {
+        return template;
     }
 
     public long getVersion() {

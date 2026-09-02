@@ -13,6 +13,7 @@ public record ProfileResponse(
         String description,
         List<String> tags,
         JsonNode payload,
+        JsonNode template,
         int sizeBytes,
         long version,
         Instant createdAt,

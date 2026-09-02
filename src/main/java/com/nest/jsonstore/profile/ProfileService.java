@@ -60,7 +60,8 @@ public class ProfileService {
                 trimToNull(request.description()),
                 normalizeTags(request.tags()),
                 request.payload(),
-                checkedSize(request));
+                checkedSize(request),
+                request.template());
         // Flush so the generated id, timestamps and version are in the entity before it is mapped.
         return mapper.toResponse(repository.saveAndFlush(profile));
     }
@@ -73,7 +74,8 @@ public class ProfileService {
                 trimToNull(request.description()),
                 normalizeTags(request.tags()),
                 request.payload(),
-                checkedSize(request));
+                checkedSize(request),
+                request.template());
         // Flush so the generated id, timestamps and version are in the entity before it is mapped.
         return mapper.toResponse(repository.saveAndFlush(profile));
     }

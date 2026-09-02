@@ -120,6 +120,37 @@ class ProfileIntegrationTest {
         mockMvc.perform(as(get("/api/profiles/{id}", id), alice)).andExpect(status().isNotFound());
     }
 
+    /** A composed profile keeps the selection it was built from, so it can be edited as a form later. */
+    @Test
+    void remembersTheTemplateAProfileWasComposedFrom() throws Exception {
+        String alice = tokenFor("alice");
+
+        String id = mockMvc.perform(as(post("/api/profiles"), alice)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Composed","payload":{"scenario":"checkout"},
+                                 "template":{"selection":{"scenario":"checkout","payment":"card-approved"},
+                                             "values":{"scenarioName":"Composed","quantity":2}}}"""))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString()
+                .replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+
+        mockMvc.perform(as(get("/api/profiles/{id}", id), alice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.template.selection.payment").value("card-approved"))
+                .andExpect(jsonPath("$.template.values.quantity").value(2));
+
+        // A profile written by hand simply has none.
+        mockMvc.perform(as(post("/api/profiles"), alice)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"By hand","payload":{"a":1}}"""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.template").doesNotExist());
+    }
+
     @Test
     void rejectsPayloadsOverTheConfiguredLimit() throws Exception {
         String oversized = "{\"blob\":\"" + "x".repeat(500) + "\"}";

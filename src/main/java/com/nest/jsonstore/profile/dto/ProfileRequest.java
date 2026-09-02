@@ -20,6 +20,9 @@ public record ProfileRequest(
         List<@Size(max = 40, message = "A tag must be at most 40 characters") String> tags,
 
         @NotNull(message = "The profile needs its inputs")
-        JsonNode payload
+        JsonNode payload,
+
+        /** Optional: the template selection and field values these inputs were composed from. */
+        JsonNode template
 ) {
 }

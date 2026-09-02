@@ -61,6 +61,6 @@ class ExampleDataSeeder {
                                                               String description, List<String> tags, String inputs)
             throws Exception {
         var parsed = json.readTree(inputs);
-        return new Profile(name, description, tags, parsed, mapper.sizeOf(parsed));
+        return new Profile(name, description, tags, parsed, mapper.sizeOf(parsed), null);
     }
 }

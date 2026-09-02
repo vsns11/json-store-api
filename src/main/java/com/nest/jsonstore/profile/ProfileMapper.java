@@ -27,6 +27,7 @@ class ProfileMapper {
                 profile.getDescription(),
                 profile.getTags(),
                 profile.getPayload(),
+                profile.getTemplate(),
                 profile.getSizeBytes(),
                 profile.getVersion(),
                 profile.getCreatedAt(),

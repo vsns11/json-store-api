@@ -270,5 +270,10 @@ Each field declares a `type`, which decides the control the browser draws: `text
 `default`, `required`, `help` and — where it applies — `options`, `min`, `max` and `step`, that is the
 whole vocabulary. The web repository's README lists what each one stores.
 
+A composed profile keeps the selection it was built from in its `template` column — which fragment was
+chosen in each group, and what was typed into their fields — so the browser can offer the same form
+again when the profile is edited. Profiles written by hand have no template, and the field is simply
+absent from their responses.
+
 Editing the catalogue is a config change, not a code change; a malformed catalogue fails startup rather
 than a user's first click.
