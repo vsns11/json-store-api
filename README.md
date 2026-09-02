@@ -205,5 +205,10 @@ objects deeply, lists by appending — substitutes the values, and stores the re
 string that is exactly one placeholder keeps the field's type, so `"quantity": "${quantity}"` is stored
 as a number.
 
+Each field declares a `type`, which decides the control the browser draws: `text`, `textarea`, `number`,
+`range`, `date`, `select`, `radio`, `switch`, `checkbox`, `checkboxes` or `tags`. Together with `label`,
+`default`, `required`, `help` and — where it applies — `options`, `min`, `max` and `step`, that is the
+whole vocabulary. The web repository's README lists what each one stores.
+
 Editing the catalogue is a config change, not a code change; a malformed catalogue fails startup rather
 than a user's first click.

@@ -15,16 +15,26 @@
       "description": "One basket taken through to payment",
       "fields": [
         { "key": "scenarioName", "label": "Scenario name", "type": "text", "default": "Checkout — happy path", "required": true },
-        { "key": "environment", "label": "Environment", "type": "select", "options": ["local", "dev", "staging", "prod-mirror"], "default": "staging" },
+        { "key": "environment", "label": "Environment", "type": "radio", "options": ["local", "dev", "staging", "prod-mirror"], "default": "staging" },
         { "key": "currency", "label": "Currency", "type": "select", "options": ["EUR", "GBP", "USD", "INR"], "default": "EUR" },
         { "key": "sku", "label": "Item SKU", "type": "text", "default": "NEST-01" },
-        { "key": "quantity", "label": "Quantity", "type": "number", "default": 1 },
-        { "key": "unitPriceMinor", "label": "Unit price (minor units)", "type": "number", "default": 4999 }
+        { "key": "quantity", "label": "Quantity", "type": "number", "default": 1, "min": 1, "max": 99 },
+        { "key": "unitPriceMinor", "label": "Unit price", "type": "number", "default": 4999, "help": "In minor units, so 4999 is €49.99" },
+        {
+          "key": "featureFlags",
+          "label": "Feature flags on",
+          "type": "checkboxes",
+          "options": ["express-pay", "one-click", "new-basket"],
+          "default": ["express-pay"]
+        },
+        { "key": "notes", "label": "Notes for whoever runs this", "type": "textarea", "rows": 2, "default": "" }
       ],
       "body": {
         "scenario": "checkout",
         "name": "${scenarioName}",
         "environment": "${environment}",
+        "featureFlags": "${featureFlags}",
+        "notes": "${notes}",
         "basket": {
           "currency": "${currency}",
           "lines": [{ "sku": "${sku}", "quantity": "${quantity}", "unitPriceMinor": "${unitPriceMinor}" }]
@@ -38,11 +48,11 @@
       "description": "A file pushed through the importer",
       "fields": [
         { "key": "scenarioName", "label": "Scenario name", "type": "text", "default": "Bulk import — 10k rows", "required": true },
-        { "key": "environment", "label": "Environment", "type": "select", "options": ["local", "dev", "staging", "prod-mirror"], "default": "staging" },
+        { "key": "environment", "label": "Environment", "type": "radio", "options": ["local", "dev", "staging", "prod-mirror"], "default": "staging" },
         { "key": "sourceKey", "label": "Source file", "type": "text", "default": "2026-09-01/orders.csv" },
-        { "key": "rows", "label": "Rows", "type": "number", "default": 10000 },
-        { "key": "batchSize", "label": "Batch size", "type": "number", "default": 500 },
-        { "key": "stopOnError", "label": "Stop on first error", "type": "boolean", "default": false }
+        { "key": "rows", "label": "Rows", "type": "number", "default": 10000, "min": 1 },
+        { "key": "batchSize", "label": "Batch size", "type": "range", "default": 500, "min": 100, "max": 2000, "step": 100 },
+        { "key": "stopOnError", "label": "Stop on first error", "type": "switch", "default": false }
       ],
       "body": {
         "scenario": "bulk-import",
@@ -59,15 +69,20 @@
       "description": "A renewal charged on its due date",
       "fields": [
         { "key": "scenarioName", "label": "Scenario name", "type": "text", "default": "Renewal — card on file", "required": true },
-        { "key": "environment", "label": "Environment", "type": "select", "options": ["local", "dev", "staging", "prod-mirror"], "default": "staging" },
-        { "key": "planCode", "label": "Plan", "type": "text", "default": "PRO-MONTHLY" },
-        { "key": "renewalDate", "label": "Renewal date", "type": "text", "default": "2026-10-01" }
+        { "key": "environment", "label": "Environment", "type": "radio", "options": ["local", "dev", "staging", "prod-mirror"], "default": "staging" },
+        { "key": "planCode", "label": "Plan", "type": "select", "options": [
+          { "value": "PRO-MONTHLY", "label": "Pro, monthly" },
+          { "value": "PRO-YEARLY", "label": "Pro, yearly" },
+          { "value": "TEAM-YEARLY", "label": "Team, yearly" }
+        ], "default": "PRO-MONTHLY" },
+        { "key": "renewalDate", "label": "Renewal date", "type": "date", "default": "2026-10-01" },
+        { "key": "autoRenew", "label": "Auto-renew", "type": "switch", "default": true }
       ],
       "body": {
         "scenario": "subscription-renewal",
         "name": "${scenarioName}",
         "environment": "${environment}",
-        "subscription": { "plan": "${planCode}", "renewsOn": "${renewalDate}", "autoRenew": true }
+        "subscription": { "plan": "${planCode}", "renewsOn": "${renewalDate}", "autoRenew": "${autoRenew}" }
       }
     },
     {
@@ -78,7 +93,7 @@
       "fields": [
         { "key": "customerId", "label": "Customer id", "type": "text", "default": "cus_1042" },
         { "key": "country", "label": "Country", "type": "select", "options": ["NL", "GB", "DE", "US", "IN"], "default": "NL" },
-        { "key": "loyaltyTier", "label": "Loyalty tier", "type": "select", "options": ["none", "silver", "gold"], "default": "gold" }
+        { "key": "loyaltyTier", "label": "Loyalty tier", "type": "radio", "options": ["none", "silver", "gold"], "default": "gold" }
       ],
       "body": {
         "customer": { "type": "returning", "id": "${customerId}", "country": "${country}", "loyaltyTier": "${loyaltyTier}" }
@@ -91,7 +106,7 @@
       "description": "First order, no history",
       "fields": [
         { "key": "country", "label": "Country", "type": "select", "options": ["NL", "GB", "DE", "US", "IN"], "default": "GB" },
-        { "key": "marketingOptIn", "label": "Marketing opt-in", "type": "boolean", "default": false }
+        { "key": "marketingOptIn", "label": "Marketing opt-in", "type": "switch", "default": false }
       ],
       "body": {
         "customer": { "type": "new", "country": "${country}", "marketingOptIn": "${marketingOptIn}" }
@@ -103,7 +118,7 @@
       "name": "Card — approved",
       "description": "The card clears first time",
       "fields": [
-        { "key": "cardBrand", "label": "Card brand", "type": "select", "options": ["visa", "mastercard", "amex"], "default": "visa" },
+        { "key": "cardBrand", "label": "Card brand", "type": "radio", "options": ["visa", "mastercard", "amex"], "default": "visa" },
         { "key": "cardLast4", "label": "Last four digits", "type": "text", "default": "4242" }
       ],
       "body": {
@@ -116,7 +131,7 @@
       "name": "Card — declined",
       "description": "The issuer refuses the charge",
       "fields": [
-        { "key": "cardBrand", "label": "Card brand", "type": "select", "options": ["visa", "mastercard", "amex"], "default": "visa" },
+        { "key": "cardBrand", "label": "Card brand", "type": "radio", "options": ["visa", "mastercard", "amex"], "default": "visa" },
         { "key": "declineCode", "label": "Decline code", "type": "select", "options": ["expired_card", "insufficient_funds", "do_not_honour"], "default": "expired_card" }
       ],
       "body": {
@@ -130,7 +145,7 @@
       "description": "Paid out of band, settles later",
       "fields": [
         { "key": "bankScheme", "label": "Scheme", "type": "select", "options": ["ideal", "sepa", "faster-payments"], "default": "ideal" },
-        { "key": "settlementDelayHours", "label": "Settlement delay (hours)", "type": "number", "default": 24 }
+        { "key": "settlementDelayHours", "label": "Settlement delay (hours)", "type": "range", "default": 24, "min": 0, "max": 72, "step": 6 }
       ],
       "body": {
         "payment": { "method": "bank-transfer", "scheme": "${bankScheme}", "settlementDelayHours": "${settlementDelayHours}" }
@@ -143,10 +158,16 @@
       "description": "Delivered to the billing address",
       "fields": [
         { "key": "carrier", "label": "Carrier", "type": "select", "options": ["postnl", "dhl", "ups"], "default": "postnl" },
-        { "key": "promisedDays", "label": "Promised days", "type": "number", "default": 3 }
+        { "key": "promisedDays", "label": "Promised days", "type": "number", "default": 3, "min": 1, "max": 30 },
+        { "key": "signatureRequired", "label": "Signature on delivery", "type": "checkbox", "checkboxLabel": "Required", "default": false }
       ],
       "body": {
-        "delivery": { "mode": "standard", "carrier": "${carrier}", "promisedDays": "${promisedDays}" }
+        "delivery": {
+          "mode": "standard",
+          "carrier": "${carrier}",
+          "promisedDays": "${promisedDays}",
+          "signatureRequired": "${signatureRequired}"
+        }
       }
     },
     {
@@ -168,10 +189,16 @@
       "description": "The run should finish cleanly",
       "fields": [
         { "key": "expectedStatus", "label": "Expected status", "type": "text", "default": "paid" },
-        { "key": "expectedEmail", "label": "Expected email", "type": "text", "default": "order-confirmation" }
+        {
+          "key": "expectedEmails",
+          "label": "Emails that must arrive",
+          "type": "tags",
+          "default": ["order-confirmation"],
+          "help": "Enter to add each one"
+        }
       ],
       "body": {
-        "expected": { "outcome": "success", "status": "${expectedStatus}", "emails": ["${expectedEmail}"] }
+        "expected": { "outcome": "success", "status": "${expectedStatus}", "emails": "${expectedEmails}" }
       }
     },
     {
@@ -181,10 +208,11 @@
       "description": "The run should stop with an error",
       "fields": [
         { "key": "expectedStatus", "label": "Expected status", "type": "text", "default": "payment_failed" },
-        { "key": "expectedError", "label": "Expected error code", "type": "text", "default": "card_declined" }
+        { "key": "expectedError", "label": "Expected error code", "type": "select", "options": ["card_declined", "timeout", "validation_failed"], "default": "card_declined" },
+        { "key": "failureNotes", "label": "Why this should fail", "type": "textarea", "rows": 2, "default": "" }
       ],
       "body": {
-        "expected": { "outcome": "failure", "status": "${expectedStatus}", "error": "${expectedError}", "emails": [] }
+        "expected": { "outcome": "failure", "status": "${expectedStatus}", "error": "${expectedError}", "notes": "${failureNotes}", "emails": [] }
       }
     }
   ]
