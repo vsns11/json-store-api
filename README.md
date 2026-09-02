@@ -18,7 +18,7 @@ src/main/resources/
 ├── db/migration/       Flyway schema
 ├── ldap/users.ldif     test directory used outside production
 └── templates/          the fragment catalogue
-openshift/              Deployment, Service, Route, HPA, BuildConfig
+chart/                  Helm chart: Deployment, Service, Route or Ingress, HPA, PDB
 ```
 
 ## Getting started
@@ -159,30 +159,49 @@ from profile
 where payload @> '{"scenario": "checkout"}';
 ```
 
-## Deploying to OpenShift
+## Deploying with Helm
 
-The image runs as an arbitrary UID with GID 0, which is what the `restricted-v2` SCC assigns — so no
-`anyuid` exception is needed. It listens on 8080, never binds a privileged port, and runs fine with a
-read-only root filesystem (only `/tmp` is mounted writable).
+The chart in `chart/` deploys the API to OpenShift or plain Kubernetes. Images come from your CI;
+the chart only deploys them.
 
 ```bash
-oc new-project json-store
-
-# Either let OpenShift build the image from git…
-oc apply -f openshift/build.yaml
-oc start-build json-store-api --follow
-
-# …or push your own image and skip build.yaml.
-
-oc apply -f openshift/config.yaml       # edit the secret first
-oc apply -f openshift/deployment.yaml
-oc apply -f openshift/route.yaml        # only if the API needs its own hostname
+helm upgrade --install json-store-api ./chart \
+  --namespace json-store --create-namespace \
+  --set image.repository=registry.example.com/json-store-api \
+  --set image.tag=1.0.0 \
+  --set existingSecret=json-store-credentials \
+  --set route.enabled=true --set route.host=json-store.apps.example.com
 ```
 
-If the web app's Route already forwards `/api` to this Service, skip `route.yaml` — same-origin means no
-CORS and one certificate. Otherwise set `CORS_ORIGINS` to the web app's URL.
+Create the secret first, so no credential is ever written into a values file:
 
-Probes use the management port, which is not exposed through any Service or Route:
+```bash
+kubectl create secret generic json-store-credentials -n json-store \
+  --from-literal=DB_USER=jsonstore \
+  --from-literal=DB_PASSWORD='…' \
+  --from-literal=LDAP_MANAGER_DN='cn=service-account,ou=services,dc=example,dc=com' \
+  --from-literal=LDAP_MANAGER_PASSWORD='…' \
+  --from-literal=JWT_SECRET="$(openssl rand -base64 48)"
+```
+
+Everything else lives in `chart/values.yaml`, which is commented; the settings that usually change are
+`image.repository`, the entries under `config` (database host, LDAP URL and DN patterns, CORS origin)
+and whether you want a `route` (OpenShift) or an `ingress` (Kubernetes).
+
+See what a release will contain before applying it:
+
+```bash
+helm template json-store-api ./chart --set route.enabled=true --set route.host=… | less
+```
+
+If the web app's Route already forwards `/api` to this Service, leave `route.enabled=false` and
+`CORS_ORIGINS` empty — same origin means no CORS and one certificate.
+
+The image runs as an arbitrary UID with GID 0, which is what the `restricted-v2` SCC assigns, listens
+on 8080 and needs no privileged port, and runs with a read-only root filesystem (the chart mounts an
+`emptyDir` at `/tmp` for Tomcat).
+
+Probes use the management port, which no Service or Route exposes:
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -192,6 +211,21 @@ Probes use the management port, which is not exposed through any Service or Rout
 
 Every request gets an `X-Request-Id` — reusing the router's if present — echoed back and printed in
 every log line for that request.
+
+## Building the image
+
+```bash
+docker build -t json-store-api:1.0.0 .
+```
+
+Both base images are build arguments, so an internal image can be used instead — including an OpenJDK
+image that already contains Maven:
+
+```bash
+docker build -t json-store-api:1.0.0 \
+  --build-arg BUILD_IMAGE=registry.example.com/openjdk-maven:21 \
+  --build-arg RUNTIME_IMAGE=registry.example.com/openjdk:21-jre .
+```
 
 ## Scaling
 

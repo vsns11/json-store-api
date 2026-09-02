@@ -1,0 +1,15 @@
+{{ .Chart.Name }} {{ .Chart.AppVersion }} installed as {{ .Release.Name }}.
+
+Check it came up:
+  kubectl rollout status deployment/{{ include "json-store-api.fullname" . }} -n {{ .Release.Namespace }}
+
+Try it from inside the cluster:
+  kubectl run curl --rm -it --image=curlimages/curl -n {{ .Release.Namespace }} -- \
+    curl -s http://{{ include "json-store-api.fullname" . }}:{{ .Values.service.port }}/api/auth/login \
+      -H 'Content-Type: application/json' -d '{"username":"...","password":"..."}'
+
+{{- if not .Values.existingSecret }}
+
+The credentials came from values, which is fine for a trial but not for a real cluster.
+Create a secret and set `existingSecret` to its name instead.
+{{- end }}

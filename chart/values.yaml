@@ -1,0 +1,76 @@
+# Everything the chart can be told. Only `image.repository` and the values under
+# `config` and `secrets` normally need changing.
+
+replicaCount: 3
+
+image:
+  repository: ghcr.io/your-org/json-store-api
+  tag: ""              # defaults to the chart's appVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  port: 8080
+
+# Non-secret settings, rendered into a ConfigMap.
+config:
+  SPRING_PROFILES_ACTIVE: prod
+  DB_HOST: postgresql
+  DB_PORT: "5432"
+  DB_NAME: jsonstore
+  DB_POOL_MAX: "16"
+  MAX_PAYLOAD_BYTES: "1048576"
+  CORS_ORIGINS: ""     # leave empty when a Route or Ingress serves the UI on this host
+  LDAP_URL: ldaps://ldap.example.com:636
+  LDAP_BASE: dc=example,dc=com
+  LDAP_USER_DN_PATTERNS: uid={0},ou=people
+  LDAP_GROUP_SEARCH_BASE: ou=groups
+
+# Credentials. In a real cluster set `existingSecret` and leave these empty, so
+# nothing sensitive is ever written into a values file.
+existingSecret: ""
+secrets:
+  DB_USER: ""
+  DB_PASSWORD: ""
+  LDAP_MANAGER_DN: ""
+  LDAP_MANAGER_PASSWORD: ""
+  JWT_SECRET: ""       # at least 32 characters
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 30
+  targetCPUUtilizationPercentage: 65
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# OpenShift Route. Use `ingress` instead on plain Kubernetes.
+route:
+  enabled: false
+  host: ""
+  path: /api
+  tls:
+    termination: edge
+
+ingress:
+  enabled: false
+  className: nginx
+  host: ""
+  path: /api
+  tls:
+    enabled: true
+    secretName: json-store-tls
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -17,4 +17,6 @@ jobs:
           cache: maven
       # Integration tests start PostgreSQL through Testcontainers, which the runner provides.
       - run: ./mvnw -B verify
+      - uses: azure/setup-helm@v4
+      - run: helm lint chart
       - run: docker build -t json-store-api:${{ github.sha }} .

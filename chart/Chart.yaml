@@ -1,0 +1,6 @@
+apiVersion: v2
+name: json-store-api
+description: Stores test-scenario profiles in PostgreSQL
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
