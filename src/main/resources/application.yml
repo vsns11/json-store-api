@@ -1,0 +1,114 @@
+spring:
+  application:
+    name: json-store
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:jsonstore}
+    username: ${DB_USER:${user.name}}
+    password: ${DB_PASSWORD:}
+    hikari:
+      pool-name: json-store-pool
+      # Pool size is per instance: total connections = replicas x maximum-pool-size.
+      # Keep the product below PostgreSQL's max_connections, or front the database with PgBouncer.
+      maximum-pool-size: ${DB_POOL_MAX:16}
+      minimum-idle: ${DB_POOL_MIN:4}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:3000}
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      leak-detection-threshold: 20000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema; Hibernate only checks that it matches the mapping.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        jdbc.batch_size: 50
+        query.in_clause_parameter_padding: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+  threads:
+    virtual:
+      # Off by default: the PostgreSQL driver still pins carrier threads on Java 21.
+      enabled: ${VIRTUAL_THREADS:false}
+
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,application/problem+json
+    min-response-size: 1024
+  http2:
+    enabled: true
+  max-http-request-header-size: 16KB
+  tomcat:
+    threads:
+      max: ${TOMCAT_MAX_THREADS:200}
+      min-spare: ${TOMCAT_MIN_THREADS:20}
+    accept-count: 200
+    max-connections: ${TOMCAT_MAX_CONNECTIONS:10000}
+    connection-timeout: 5s
+    # Trust the load balancer's forwarded headers for correct client IPs and scheme.
+    remoteip:
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+  error:
+    include-message: never
+    include-stacktrace: never
+    whitelabel:
+      enabled: false
+
+# Actuator listens on its own port so probes and metrics are never publicly routable.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  info:
+    env:
+      enabled: true
+
+app:
+  # Example documents are inserted into an empty database outside the prod profile.
+  seed-examples: ${SEED_EXAMPLES:true}
+  cors:
+    # Comma-separated list of the origins the browser app is served from.
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  limits:
+    # Rejects oversized documents before they reach the database.
+    max-payload-bytes: ${MAX_PAYLOAD_BYTES:1048576}
+    max-page-size: ${MAX_PAGE_SIZE:100}
+
+logging:
+  level:
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:warn}
+  pattern:
+    # requestId comes from RequestIdFilter and ties log lines to a single HTTP call.
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%X{requestId:-        }] %-40.40logger{39} : %m%n'

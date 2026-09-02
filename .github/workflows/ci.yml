@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+      # Integration tests start PostgreSQL through Testcontainers, which the runner provides.
+      - run: ./mvnw -B verify
+      - run: docker build -t json-store-api:${{ github.sha }} .

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: json-store-api
+data:
+  SPRING_PROFILES_ACTIVE: prod
+  DB_HOST: postgresql
+  DB_PORT: '5432'
+  DB_NAME: jsonstore
+  DB_POOL_MAX: '16'
+  MAX_PAYLOAD_BYTES: '1048576'
+  # Origin the web app is served from. Leave empty when a Route sends /api here on the same host.
+  CORS_ORIGINS: https://json-store.apps.example.com
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: json-store-db
+type: Opaque
+stringData:
+  # Replace with a real secret source (Vault, External Secrets, or `oc create secret`).
+  DB_USER: jsonstore
+  DB_PASSWORD: change-me

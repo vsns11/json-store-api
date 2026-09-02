@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: json-store-api
+  labels:
+    app: json-store-api
+    app.kubernetes.io/name: json-store-api
+    app.kubernetes.io/component: api
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: json-store-api }
+  template:
+    metadata:
+      labels: { app: json-store-api }
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '8081'
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: json-store-api }
+      containers:
+        - name: api
+          # Replace with your registry, or image-stream tag if OpenShift builds it.
+          image: image-registry.openshift-image-registry.svc:5000/json-store/json-store-api:latest
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: management, containerPort: 8081 }
+          envFrom:
+            - configMapRef: { name: json-store-api }
+            - secretRef: { name: json-store-db }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: management }
+            periodSeconds: 5
+          lifecycle:
+            preStop:
+              # Let the router stop sending traffic before shutdown begins.
+              exec: { command: ['sh', '-c', 'sleep 5'] }
+          securityContext:
+            # No runAsUser: OpenShift assigns a UID from the namespace range, and the image
+            # is built so the root group can read everything it needs.
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ['ALL'] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            # The root filesystem is read-only, so Tomcat needs a writable scratch dir.
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+      terminationGracePeriodSeconds: 40
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: json-store-api
+  labels: { app: json-store-api }
+spec:
+  selector: { app: json-store-api }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: json-store-api
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: json-store-api }
+  minReplicas: 3
+  maxReplicas: 30
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 65 } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: json-store-api
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: { app: json-store-api }

@@ -1,0 +1,16 @@
+# Activated with SPRING_PROFILES_ACTIVE=prod. Everything here is a tightening of the defaults.
+spring:
+  datasource:
+    # No development fallbacks: the container must be given real credentials.
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  flyway:
+    # Migrations are applied by the release process, not by every booting replica.
+    enabled: ${FLYWAY_ENABLED:true}
+    baseline-on-migrate: false
+
+logging:
+  level:
+    root: warn
+    com.nest.jsonstore: info
+    org.springframework.web: warn

@@ -1,0 +1,36 @@
+# Optional: let OpenShift build the image from this repository.
+# Skip these two objects if your CI builds and pushes the image itself.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: json-store-api
+spec:
+  lookupPolicy:
+    local: true
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: json-store-api
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://git.example.com/your-org/json-store-api.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: json-store-api:latest
+  triggers:
+    - type: ConfigChange
+    - type: GitHub
+      github:
+        secretReference:
+          name: json-store-api-webhook
+  successfulBuildsHistoryLimit: 5
+  failedBuildsHistoryLimit: 5
