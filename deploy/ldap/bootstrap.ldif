@@ -1,0 +1,36 @@
+# Loaded into the local OpenLDAP container on first start. The base entry dc=example,dc=com is
+# created by the image itself, so it is not repeated here.
+dn: ou=people,dc=example,dc=com
+objectClass: organizationalUnit
+ou: people
+
+dn: uid=alice,ou=people,dc=example,dc=com
+objectClass: inetOrgPerson
+cn: Alice Nguyen
+sn: Nguyen
+uid: alice
+mail: alice@example.com
+userPassword: secret
+
+dn: uid=bob,ou=people,dc=example,dc=com
+objectClass: inetOrgPerson
+cn: Bob Patel
+sn: Patel
+uid: bob
+mail: bob@example.com
+userPassword: secret
+
+dn: ou=groups,dc=example,dc=com
+objectClass: organizationalUnit
+ou: groups
+
+dn: cn=developers,ou=groups,dc=example,dc=com
+objectClass: groupOfNames
+cn: developers
+member: uid=alice,ou=people,dc=example,dc=com
+member: uid=bob,ou=people,dc=example,dc=com
+
+dn: cn=admins,ou=groups,dc=example,dc=com
+objectClass: groupOfNames
+cn: admins
+member: uid=alice,ou=people,dc=example,dc=com

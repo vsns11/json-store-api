@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -25,7 +26,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+// A pure controller slice: authentication is covered by the integration test instead.
 @WebMvcTest(JsonDocumentController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @EnableConfigurationProperties(CorsProperties.class)
 @EnableAutoConfiguration(exclude = org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration.class)
 class JsonDocumentControllerTest {

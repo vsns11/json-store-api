@@ -9,10 +9,15 @@ depends on it.
 ```
 src/main/java/com/nest/jsonstore/
 ├── document/   entity, repository, service, controller, DTOs
-├── config/     CORS, limits, request-id filter, ETag filter
+├── security/   LDAP sign-in, token issuing, authorisation rules
+├── template/   the catalogue of JSON fragments the composer offers
+├── config/     limits, request-id filter, ETag filter
 └── error/      one error shape for the whole API
-src/main/resources/db/migration/   Flyway schema
-openshift/                          Deployment, Service, Route, HPA, BuildConfig
+src/main/resources/
+├── db/migration/       Flyway schema
+├── ldap/users.ldif     test directory used outside production
+└── templates/          the fragment catalogue
+openshift/              Deployment, Service, Route, HPA, BuildConfig
 ```
 
 ## Run it
@@ -34,6 +39,33 @@ It defaults to `localhost:5432/jsonstore` with your OS username and an empty pas
 stock Homebrew PostgreSQL gives you, and seeds three example documents into an empty database (never
 under the `prod` profile).
 
+## Authentication
+
+Users sign in against LDAP. The bind happens once, at `POST /api/auth/login`; everything after that
+carries a short-lived bearer token, so no session is kept and any replica can serve any request.
+
+Group membership in the directory becomes a role — `cn=admins` becomes `ROLE_ADMINS` — and deleting a
+document requires it. Everything else needs only a valid token.
+
+**Locally there is nothing to install.** Outside the `prod` profile an in-process LDAP server starts with
+the directory in `src/main/resources/ldap/users.ldif`:
+
+| User | Password | Groups | Can delete |
+| --- | --- | --- | --- |
+| `alice` | `secret` | admins, developers | yes |
+| `bob` | `secret` | developers | no |
+
+`docker compose up` instead runs a real OpenLDAP container seeded from `deploy/ldap/bootstrap.ldif`
+with the same two accounts, which is closer to what production does.
+
+```bash
+TOKEN=$(curl -s localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"secret"}' | jq -r .token)
+curl -s localhost:8080/api/documents -H "Authorization: Bearer $TOKEN"
+```
+
+To point at a corporate directory, set `LDAP_URL` and the DN patterns below; nothing else changes.
+
 ## Configuration
 
 | Variable | Default | Notes |
@@ -46,21 +78,35 @@ under the `prod` profile).
 | `MAX_PAYLOAD_BYTES` `MAX_PAGE_SIZE` | `1048576` `100` | Request guard rails |
 | `TOMCAT_MAX_THREADS` `TOMCAT_MAX_CONNECTIONS` | `200` `10000` | |
 | `SPRING_PROFILES_ACTIVE` | — | Set to `prod` in production |
+| `LDAP_URL` | embedded server | Required under `prod` |
+| `LDAP_BASE` | `dc=example,dc=com` | Root the DNs below are relative to |
+| `LDAP_MANAGER_DN` `LDAP_MANAGER_PASSWORD` | empty | Account used for group lookups |
+| `LDAP_USER_DN_PATTERNS` | `uid={0},ou=people` | Leave empty to search instead |
+| `LDAP_USER_SEARCH_BASE` `LDAP_USER_SEARCH_FILTER` | empty, `(uid={0})` | Used when no DN pattern is set |
+| `LDAP_GROUP_SEARCH_BASE` `LDAP_GROUP_SEARCH_FILTER` | `ou=groups`, `(member={0})` | Membership becomes a role |
+| `JWT_SECRET` | dev default | Required under `prod`; at least 32 characters |
+| `JWT_TTL` | `PT8H` | How long a sign-in lasts |
 | `SEED_EXAMPLES` | `true` | Example documents for an empty DB; ignored under `prod` |
 
 ## API
 
+All endpoints need a bearer token except `POST /api/auth/login`.
+
 | Method | Path | Notes |
 | --- | --- | --- |
+| `POST` | `/api/auth/login` | `{username, password}` — binds to LDAP, returns a token and roles |
+| `GET` | `/api/auth/me` | Who the token belongs to |
+| `GET` | `/api/templates` | The catalogue of JSON fragments the composer merges |
 | `GET` | `/api/documents` | `search`, `page`, `size`, `sort`, `direction`; returns summaries |
 | `GET` | `/api/documents/stats` | Document count, total bytes, last write |
 | `GET` | `/api/documents/{id}` | One document including its payload |
 | `POST` | `/api/documents` | Create · `201` with the stored document |
 | `PUT` | `/api/documents/{id}` | Replace name, description, tags and payload |
-| `DELETE` | `/api/documents/{id}` | `204` |
+| `DELETE` | `/api/documents/{id}` | `204` — requires the admins group |
 
 ```bash
-curl -s localhost:8080/api/documents -H 'Content-Type: application/json' \
+curl -s localhost:8080/api/documents -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
   -d '{"name":"Hello","tags":["demo"],"payload":{"greeting":"hi","items":[1,2,3]}}'
 ```
 
@@ -142,6 +188,18 @@ Stateless, so throughput scales with replicas. What actually needs attention as 
 ```
 
 A controller slice covers validation, malformed-JSON reporting and unknown ids with no database. An
-integration test runs the real stack against a PostgreSQL started by Testcontainers, checking the
-migrations, the `jsonb` mapping, payload-inclusive search and the size limit — so that one needs a
-Docker daemon.
+integration test runs the real stack against a PostgreSQL started by Testcontainers and the in-process
+directory, checking sign-in, the roles that come from LDAP groups (bob cannot delete, alice can), the
+migrations, the `jsonb` mapping, payload-inclusive search, the size limit and the template catalogue —
+so that one needs a Docker daemon.
+
+## Template catalogue
+
+`GET /api/templates` returns `src/main/resources/templates/catalog.json`: fragment definitions grouped
+into base templates and optional modules, each with the fields it needs and a body containing
+`${field}` placeholders. The browser merges the chosen fragments — objects deeply, lists by appending —
+substitutes the values, and stores the result as one document. A string that is exactly one placeholder
+keeps the field's type, so `"replicas": "${replicas}"` is stored as a number.
+
+Editing the catalogue is a config change, not a code change; a malformed catalogue fails startup rather
+than a user's first click.

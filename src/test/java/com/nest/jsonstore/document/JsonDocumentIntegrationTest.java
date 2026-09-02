@@ -1,13 +1,16 @@
 package com.nest.jsonstore.document;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -20,8 +23,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Exercises the real stack against a real PostgreSQL: Flyway migrations, the jsonb mapping,
- * payload-inclusive search and the size limit. Requires a working Docker daemon.
+ * Exercises the real stack against a real PostgreSQL and the in-process LDAP directory: sign-in,
+ * the roles that come from LDAP groups, Flyway migrations, the jsonb mapping, payload-inclusive
+ * search and the size limit. Requires a working Docker daemon.
  */
 @SpringBootTest(properties = {"app.seed-examples=false", "app.limits.max-payload-bytes=400"})
 @AutoConfigureMockMvc
@@ -38,9 +42,53 @@ class JsonDocumentIntegrationTest {
     @Autowired
     JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    ObjectMapper objectMapper;
+
+    /** Signs in against the embedded directory and returns the bearer token. */
+    private String tokenFor(String username) throws Exception {
+        String body = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"%s","password":"secret"}""".formatted(username)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(body).get("token").asText();
+    }
+
+    private static MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder request, String token) {
+        return request.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+    }
+
+    @Test
+    void refusesAnyoneWithoutAToken() throws Exception {
+        mockMvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"alice","password":"wrong"}"""))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void readsGroupsFromTheDirectory() throws Exception {
+        mockMvc.perform(as(get("/api/auth/me"), tokenFor("alice")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("alice"))
+                .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.containsInAnyOrder("ADMINS", "DEVELOPERS")));
+
+        mockMvc.perform(as(get("/api/auth/me"), tokenFor("bob")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.contains("DEVELOPERS")));
+    }
+
     @Test
     void storesThePayloadAsRealJsonbAndFindsItByItsContents() throws Exception {
-        String id = mockMvc.perform(post("/api/documents")
+        String alice = tokenFor("alice");
+
+        String id = mockMvc.perform(as(post("/api/documents"), alice)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Topology","tags":["infra"],
@@ -61,20 +109,22 @@ class JsonDocumentIntegrationTest {
         assertThat(region).isEqualTo("eu-west");
 
         // Search reaches into the payload, not just the name.
-        mockMvc.perform(get("/api/documents").param("search", "eu-west"))
+        mockMvc.perform(as(get("/api/documents").param("search", "eu-west"), alice))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalItems").value(1))
                 .andExpect(jsonPath("$.items[0].name").value("Topology"));
 
-        mockMvc.perform(delete("/api/documents/{id}", id)).andExpect(status().isNoContent());
-        mockMvc.perform(get("/api/documents/{id}", id)).andExpect(status().isNotFound());
+        // Deleting belongs to the admins group: bob is only a developer.
+        mockMvc.perform(as(delete("/api/documents/{id}", id), tokenFor("bob"))).andExpect(status().isForbidden());
+        mockMvc.perform(as(delete("/api/documents/{id}", id), alice)).andExpect(status().isNoContent());
+        mockMvc.perform(as(get("/api/documents/{id}", id), alice)).andExpect(status().isNotFound());
     }
 
     @Test
     void rejectsPayloadsOverTheConfiguredLimit() throws Exception {
         String oversized = "{\"blob\":\"" + "x".repeat(500) + "\"}";
 
-        mockMvc.perform(post("/api/documents")
+        mockMvc.perform(as(post("/api/documents"), tokenFor("alice"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Too big\",\"payload\":%s}".formatted(oversized)))
                 .andExpect(status().isPayloadTooLarge())
@@ -83,8 +133,16 @@ class JsonDocumentIntegrationTest {
 
     @Test
     void rejectsAnIdThatIsNotAUuid() throws Exception {
-        mockMvc.perform(get("/api/documents/{id}", "not-a-uuid"))
+        mockMvc.perform(as(get("/api/documents/{id}", "not-a-uuid"), tokenFor("alice")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void servesTheTemplateCatalogue() throws Exception {
+        mockMvc.perform(as(get("/api/templates"), tokenFor("bob")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.groups[0].id").value("base"))
+                .andExpect(jsonPath("$.fragments[0].body").isMap());
     }
 }

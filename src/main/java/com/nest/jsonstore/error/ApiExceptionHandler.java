@@ -7,6 +7,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -46,6 +47,17 @@ class ApiExceptionHandler {
                     .withLocation(new ApiError.Location(cause.getLocation().getLineNr(), cause.getLocation().getColumnNr()));
         }
         return ResponseEntity.badRequest().body(error);
+    }
+
+    /**
+     * A failed sign-in. The message never says which half was wrong, so the endpoint cannot be
+     * used to find out which usernames exist.
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<ApiError> handleAuthenticationFailure(AuthenticationException e) {
+        log.info("Sign-in refused: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiError.of(401, "Authentication failed", "Wrong username or password"));
     }
 
     @ExceptionHandler(PayloadTooLargeException.class)

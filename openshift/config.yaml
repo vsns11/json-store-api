@@ -11,6 +11,11 @@ data:
   MAX_PAYLOAD_BYTES: '1048576'
   # Origin the web app is served from. Leave empty when a Route sends /api here on the same host.
   CORS_ORIGINS: https://json-store.apps.example.com
+  # Directory. Group membership becomes a role: cn=admins -> ROLE_ADMINS, which may delete.
+  LDAP_URL: ldaps://ldap.corp.example.com:636
+  LDAP_BASE: dc=example,dc=com
+  LDAP_USER_DN_PATTERNS: uid={0},ou=people
+  LDAP_GROUP_SEARCH_BASE: ou=groups
 ---
 apiVersion: v1
 kind: Secret
@@ -21,3 +26,8 @@ stringData:
   # Replace with a real secret source (Vault, External Secrets, or `oc create secret`).
   DB_USER: jsonstore
   DB_PASSWORD: change-me
+  # Read-only account used to look up group membership; omit if anonymous search is allowed.
+  LDAP_MANAGER_DN: cn=service-account,ou=services,dc=example,dc=com
+  LDAP_MANAGER_PASSWORD: change-me
+  # At least 32 characters, different per environment: it signs every session token.
+  JWT_SECRET: change-me-to-a-long-random-string

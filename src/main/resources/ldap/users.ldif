@@ -1,0 +1,51 @@
+# Test directory for the in-process LDAP server used outside production.
+# alice belongs to admins and developers; bob only to developers, so bob cannot delete documents.
+dn: dc=example,dc=com
+objectclass: top
+objectclass: domain
+dc: example
+
+dn: ou=people,dc=example,dc=com
+objectclass: top
+objectclass: organizationalUnit
+ou: people
+
+dn: uid=alice,ou=people,dc=example,dc=com
+objectclass: top
+objectclass: person
+objectclass: organizationalPerson
+objectclass: inetOrgPerson
+cn: Alice Nguyen
+sn: Nguyen
+uid: alice
+mail: alice@example.com
+userPassword: secret
+
+dn: uid=bob,ou=people,dc=example,dc=com
+objectclass: top
+objectclass: person
+objectclass: organizationalPerson
+objectclass: inetOrgPerson
+cn: Bob Patel
+sn: Patel
+uid: bob
+mail: bob@example.com
+userPassword: secret
+
+dn: ou=groups,dc=example,dc=com
+objectclass: top
+objectclass: organizationalUnit
+ou: groups
+
+dn: cn=developers,ou=groups,dc=example,dc=com
+objectclass: top
+objectclass: groupOfNames
+cn: developers
+member: uid=alice,ou=people,dc=example,dc=com
+member: uid=bob,ou=people,dc=example,dc=com
+
+dn: cn=admins,ou=groups,dc=example,dc=com
+objectclass: top
+objectclass: groupOfNames
+cn: admins
+member: uid=alice,ou=people,dc=example,dc=com

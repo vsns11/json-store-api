@@ -4,10 +4,20 @@ spring:
     # No development fallbacks: the container must be given real credentials.
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+  ldap:
+    # A real directory is required; there is no embedded fallback in production.
+    urls: ${LDAP_URL}
+
   flyway:
     # Migrations are applied by the release process, not by every booting replica.
     enabled: ${FLYWAY_ENABLED:true}
     baseline-on-migrate: false
+
+app:
+  security:
+    jwt:
+      # No default: the deployment must supply a secret of at least 32 characters.
+      secret: ${JWT_SECRET}
 
 logging:
   level:

@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "groups": [
+    { "id": "base", "label": "Base template", "required": true, "help": "The shape everything else is merged into" },
+    { "id": "datastore", "label": "Datastore" },
+    { "id": "cache", "label": "Cache" },
+    { "id": "messaging", "label": "Messaging" },
+    { "id": "observability", "label": "Observability" }
+  ],
+  "fragments": [
+    {
+      "id": "microservice",
+      "group": "base",
+      "name": "Microservice",
+      "description": "A long-running HTTP service",
+      "fields": [
+        { "key": "serviceName", "label": "Service name", "type": "text", "default": "orders-api", "required": true },
+        { "key": "image", "label": "Container image", "type": "text", "default": "ghcr.io/acme/orders-api:1.0.0" },
+        { "key": "replicas", "label": "Replicas", "type": "number", "default": 3 },
+        { "key": "environment", "label": "Environment", "type": "select", "options": ["dev", "staging", "prod"], "default": "prod" },
+        { "key": "publicApi", "label": "Publicly routable", "type": "boolean", "default": true }
+      ],
+      "body": {
+        "kind": "microservice",
+        "metadata": { "name": "${serviceName}", "environment": "${environment}" },
+        "spec": {
+          "image": "${image}",
+          "replicas": "${replicas}",
+          "port": 8080,
+          "public": "${publicApi}",
+          "healthcheck": { "path": "/actuator/health", "intervalSeconds": 10 }
+        }
+      }
+    },
+    {
+      "id": "batch-job",
+      "group": "base",
+      "name": "Batch job",
+      "description": "A scheduled job that runs to completion",
+      "fields": [
+        { "key": "serviceName", "label": "Job name", "type": "text", "default": "nightly-reconcile", "required": true },
+        { "key": "image", "label": "Container image", "type": "text", "default": "ghcr.io/acme/reconcile:1.0.0" },
+        { "key": "schedule", "label": "Schedule (cron)", "type": "text", "default": "0 2 * * *" },
+        { "key": "environment", "label": "Environment", "type": "select", "options": ["dev", "staging", "prod"], "default": "prod" },
+        { "key": "timeoutMinutes", "label": "Timeout (minutes)", "type": "number", "default": 30 }
+      ],
+      "body": {
+        "kind": "batch-job",
+        "metadata": { "name": "${serviceName}", "environment": "${environment}" },
+        "spec": {
+          "image": "${image}",
+          "schedule": "${schedule}",
+          "timeoutMinutes": "${timeoutMinutes}",
+          "retries": 2
+        }
+      }
+    },
+    {
+      "id": "postgres",
+      "group": "datastore",
+      "name": "PostgreSQL",
+      "description": "Managed PostgreSQL with a connection pool",
+      "fields": [
+        { "key": "dbHost", "label": "Host", "type": "text", "default": "postgres.internal" },
+        { "key": "dbName", "label": "Database", "type": "text", "default": "orders" },
+        { "key": "dbPoolMax", "label": "Pool size", "type": "number", "default": 16 }
+      ],
+      "body": {
+        "dependencies": {
+          "database": {
+            "engine": "postgresql",
+            "host": "${dbHost}",
+            "name": "${dbName}",
+            "pool": { "max": "${dbPoolMax}", "idleTimeoutSeconds": 300 }
+          }
+        }
+      }
+    },
+    {
+      "id": "mysql",
+      "group": "datastore",
+      "name": "MySQL",
+      "description": "Managed MySQL with a connection pool",
+      "fields": [
+        { "key": "dbHost", "label": "Host", "type": "text", "default": "mysql.internal" },
+        { "key": "dbName", "label": "Database", "type": "text", "default": "orders" },
+        { "key": "dbPoolMax", "label": "Pool size", "type": "number", "default": 12 }
+      ],
+      "body": {
+        "dependencies": {
+          "database": {
+            "engine": "mysql",
+            "host": "${dbHost}",
+            "name": "${dbName}",
+            "pool": { "max": "${dbPoolMax}" }
+          }
+        }
+      }
+    },
+    {
+      "id": "redis",
+      "group": "cache",
+      "name": "Redis",
+      "description": "Shared cache with a default TTL",
+      "fields": [
+        { "key": "redisHost", "label": "Host", "type": "text", "default": "redis.internal" },
+        { "key": "cacheTtlSeconds", "label": "Default TTL (seconds)", "type": "number", "default": 300 }
+      ],
+      "body": {
+        "dependencies": {
+          "cache": { "engine": "redis", "host": "${redisHost}", "ttlSeconds": "${cacheTtlSeconds}" }
+        }
+      }
+    },
+    {
+      "id": "kafka",
+      "group": "messaging",
+      "name": "Kafka",
+      "description": "Produces to one topic",
+      "fields": [
+        { "key": "brokers", "label": "Bootstrap servers", "type": "text", "default": "kafka-1:9092,kafka-2:9092" },
+        { "key": "topic", "label": "Topic", "type": "text", "default": "orders.events" },
+        { "key": "partitions", "label": "Partitions", "type": "number", "default": 12 }
+      ],
+      "body": {
+        "dependencies": {
+          "messaging": {
+            "engine": "kafka",
+            "brokers": "${brokers}",
+            "topics": [{ "name": "${topic}", "partitions": "${partitions}", "retentionHours": 168 }]
+          }
+        }
+      }
+    },
+    {
+      "id": "prometheus",
+      "group": "observability",
+      "name": "Prometheus and structured logs",
+      "description": "Scrape config and a log level",
+      "fields": [
+        { "key": "scrapeIntervalSeconds", "label": "Scrape interval (seconds)", "type": "number", "default": 15 },
+        { "key": "logLevel", "label": "Log level", "type": "select", "options": ["debug", "info", "warn", "error"], "default": "info" }
+      ],
+      "body": {
+        "observability": {
+          "metrics": { "enabled": true, "path": "/actuator/prometheus", "scrapeIntervalSeconds": "${scrapeIntervalSeconds}" },
+          "logs": { "format": "json", "level": "${logLevel}" }
+        }
+      }
+    }
+  ]
+}

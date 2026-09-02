@@ -19,6 +19,24 @@ services:
       timeout: 3s
       retries: 10
 
+  ldap:
+    image: osixia/openldap:1.5.0
+    command: ['--copy-service']
+    environment:
+      LDAP_ORGANISATION: Example
+      LDAP_DOMAIN: example.com
+      LDAP_ADMIN_PASSWORD: ${LDAP_ADMIN_PASSWORD:-admin}
+    volumes:
+      # Users and groups for local testing: alice (admins, developers) and bob (developers).
+      - ./deploy/ldap/bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/10-users.ldif:ro
+    ports:
+      - '${LDAP_PORT:-389}:389'
+    healthcheck:
+      test: ['CMD-SHELL', 'ldapsearch -x -H ldap://localhost -b dc=example,dc=com -D "cn=admin,dc=example,dc=com" -w "$${LDAP_ADMIN_PASSWORD:-admin}" >/dev/null']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   api:
     build: .
     image: json-store-api:${APP_VERSION:-dev}
@@ -30,10 +48,18 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-jsonstore}
       # Origin the web app is served from — it calls this API cross-origin.
       CORS_ORIGINS: ${WEB_ORIGIN:-http://localhost:3000}
+      # Users come from the directory; there is no embedded LDAP under the prod profile.
+      LDAP_URL: ldap://ldap:389
+      LDAP_BASE: dc=example,dc=com
+      LDAP_MANAGER_DN: cn=admin,dc=example,dc=com
+      LDAP_MANAGER_PASSWORD: ${LDAP_ADMIN_PASSWORD:-admin}
+      JWT_SECRET: ${JWT_SECRET:-local-compose-secret-change-me-please-32+}
     ports:
       - '${API_PORT:-8080}:8080'
     depends_on:
       postgres:
+        condition: service_healthy
+      ldap:
         condition: service_healthy
     restart: unless-stopped
 
