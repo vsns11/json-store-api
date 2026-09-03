@@ -1,24 +1,8 @@
-# Local development for this repo on its own: a database and the API.
-# The web app is a separate repository and talks to this over HTTP.
+# The API and a directory to sign in against. The database is not here on purpose: it is yours to
+# run, so nothing in a container owns your data. Point DB_HOST at wherever PostgreSQL is.
 name: json-store-api
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: ${DB_NAME:-jsonstore}
-      POSTGRES_USER: ${DB_USER:-jsonstore}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-jsonstore}
-    ports:
-      - '${DB_PORT:-5432}:5432'
-    volumes:
-      - json-store-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-jsonstore} -d ${DB_NAME:-jsonstore}']
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   ldap:
     image: osixia/openldap:1.5.0
     command: ['--copy-service']
@@ -42,13 +26,14 @@ services:
     image: json-store-api:${APP_VERSION:-dev}
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_HOST: postgres
+      # host.docker.internal is the machine running Docker, so this reaches a PostgreSQL you
+      # started yourself. That server has to accept connections from outside localhost.
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-jsonstore}
-      DB_USER: ${DB_USER:-jsonstore}
-      DB_PASSWORD: ${DB_PASSWORD:-jsonstore}
-      # Origin the web app is served from — it calls this API cross-origin.
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
       CORS_ORIGINS: ${WEB_ORIGIN:-http://localhost:3000}
-      # Users come from the directory; there is no embedded LDAP under the prod profile.
       LDAP_URL: ldap://ldap:389
       LDAP_BASE: dc=example,dc=com
       LDAP_MANAGER_DN: cn=admin,dc=example,dc=com
@@ -57,11 +42,6 @@ services:
     ports:
       - '${API_PORT:-8080}:8080'
     depends_on:
-      postgres:
-        condition: service_healthy
       ldap:
         condition: service_healthy
     restart: unless-stopped
-
-volumes:
-  json-store-data:

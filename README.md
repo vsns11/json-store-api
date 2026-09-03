@@ -23,50 +23,45 @@ chart/                  Helm chart: Deployment, Service, Route or Ingress, HPA, 
 
 ## Getting started
 
+The database is yours to run. Nothing in this repository starts a PostgreSQL or owns your data — the
+API connects to one you already have.
+
 ### What you need
 
-| Path | Needs |
+| | |
 | --- | --- |
-| With Docker (recommended) | Docker Desktop, or Docker Engine with Compose v2 |
-| Without Docker | JDK 21 or newer, PostgreSQL 14 or newer. Maven comes with the repo (`./mvnw`) |
+| PostgreSQL 14 or newer | running locally, or anywhere you can reach |
+| JDK 21 or newer | Maven comes with the repo (`./mvnw`) |
+| Docker | only if you want to run the API in a container |
 
-### With Docker
-
-Brings up PostgreSQL, an OpenLDAP directory to sign in against, and the API.
-
-```bash
-git clone <this-repo> json-store-api
-cd json-store-api
-cp .env.example .env      # then set DB_PASSWORD and JWT_SECRET
-docker compose up -d --build
-```
-
-Give it a minute on the first run — it builds the image and downloads PostgreSQL and OpenLDAP. Check it
-came up:
-
-```bash
-docker compose ps                       # three services, all healthy
-curl -s localhost:8080/api/auth/login -H 'Content-Type: application/json' \
-  -d '{"username":"alice","password":"secret"}'
-```
-
-A token in the response means the database, the directory and the API are all talking to each other.
-The store starts empty: the container runs the `prod` profile, which never seeds anything.
-
-Stop it with `docker compose down`, or `docker compose down -v` to throw the database away too.
-
-### Without Docker
-
-An in-process LDAP server starts automatically outside the `prod` profile, so only PostgreSQL is needed:
+### Running it
 
 ```bash
 createdb jsonstore
 ./mvnw spring-boot:run
 ```
 
-It defaults to `localhost:5432/jsonstore` with your operating-system username and an empty password,
-which is what a stock Homebrew PostgreSQL gives you, and seeds three example profiles into an empty
-database. Override any of it with the environment variables below.
+That is the whole thing. It connects to `localhost:5432/jsonstore` as your operating-system user with
+no password, which is what a stock Homebrew or apt PostgreSQL gives you, applies its migrations, and
+starts an in-process LDAP server so there is a directory to sign in against. An empty database also
+gets three example profiles.
+
+Check it came up:
+
+```bash
+curl -s localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"secret"}'
+```
+
+Override any of the connection details with the environment variables below — a different host, a real
+username and password, a different database name.
+
+### Running the API in a container instead
+
+`docker compose up -d --build` starts the API and an OpenLDAP to sign in against. It still expects a
+database you provide: `DB_HOST` defaults to `host.docker.internal`, which is the machine Docker is
+running on, and that PostgreSQL has to accept connections from outside localhost (`listen_addresses`
+and a `pg_hba.conf` entry). Running the API directly, as above, avoids all of that.
 
 ### Signing in
 
@@ -86,27 +81,22 @@ repository's README; in development it proxies to `localhost:8080`.
 
 | Symptom | Cause and fix |
 | --- | --- |
-| `port is already allocated` | Something else holds 5432, 8080 or 389. Set `DB_PORT`, `API_PORT` or `LDAP_PORT` in `.env` |
-| `Cannot connect to the Docker daemon` | Docker Desktop is not running |
+| `Connection refused` to 5432 | PostgreSQL is not running: `brew services start postgresql@14`, or `pg_isready` to check |
+| `database "jsonstore" does not exist` | `createdb jsonstore` |
+| `password authentication failed` | `DB_USER`/`DB_PASSWORD` do not match. Leave both unset to connect as your own account |
 | `release version 21 not supported` | An older JDK is first on the path: `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` on macOS |
-| `password authentication failed` | `DB_USER`/`DB_PASSWORD` do not match the database. With a local PostgreSQL, leave both unset to use your own account |
-| `Validate failed: migration checksum mismatch` | A migration changed after being applied. In development, `docker compose down -v` (or `dropdb jsonstore && createdb jsonstore`) and start again |
+| `Validate failed: migration checksum mismatch` | An applied migration was edited. In development, `dropdb jsonstore && createdb jsonstore` and start again |
 | Sign-in returns 401 for a user you know exists | `LDAP_USER_DN_PATTERNS` does not match where users live in your directory |
+| Port 8080 already taken | `SERVER_PORT=8081 ./mvnw spring-boot:run` |
 
 ## Looking at the data
 
 The database is a plain PostgreSQL, so anything that speaks it will do.
 
-| | Docker stack | Running the API directly |
-| --- | --- | --- |
-| Host and port | `localhost:5432` (`DB_PORT` in `.env`) | `localhost:5432` |
-| Database | `jsonstore` | `jsonstore` |
-| User / password | from `.env` | your OS user, no password |
-
-From a terminal, without leaving the stack:
+It is your own PostgreSQL, so connect to it however you normally would:
 
 ```bash
-docker compose exec postgres psql -U jsonstore -d jsonstore
+psql -d jsonstore
 
 \dt                        -- the tables: profile, flyway_schema_history
 \d profile                 -- its columns and indexes
@@ -114,7 +104,8 @@ select name, jsonb_object_keys(payload) as document from profile;
 select jsonb_pretty(payload -> 'orders-api') from profile where name = '…';
 ```
 
-In a GUI client (DBeaver, DataGrip, pgAdmin), create a PostgreSQL connection with the values above.
+In a GUI client, the connection is `localhost:5432`, database `jsonstore`, your own user — the same
+details the API uses.
 
 Two queries worth knowing, because they use the `jsonb` column rather than working around it:
 
