@@ -60,6 +60,11 @@ class ApiExceptionHandler {
                 .body(ApiError.of(401, "Authentication failed", "Wrong username or password"));
     }
 
+    @ExceptionHandler(InvalidDocumentsException.class)
+    ResponseEntity<ApiError> handleInvalidDocuments(InvalidDocumentsException e) {
+        return ResponseEntity.badRequest().body(ApiError.of(400, "Invalid inputs", e.getMessage()));
+    }
+
     @ExceptionHandler(PayloadTooLargeException.class)
     ResponseEntity<ApiError> handleTooLarge(PayloadTooLargeException e) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)

@@ -10,6 +10,8 @@ public record ProfileSummary(
         String name,
         String description,
         List<String> tags,
+        /** The systems this profile feeds, one document each. */
+        List<String> documents,
         String preview,
         int sizeBytes,
         Instant createdAt,

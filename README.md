@@ -93,6 +93,45 @@ repository's README; in development it proxies to `localhost:8080`.
 | `Validate failed: migration checksum mismatch` | A migration changed after being applied. In development, `docker compose down -v` (or `dropdb jsonstore && createdb jsonstore`) and start again |
 | Sign-in returns 401 for a user you know exists | `LDAP_USER_DN_PATTERNS` does not match where users live in your directory |
 
+## Looking at the data
+
+The database is a plain PostgreSQL, so anything that speaks it will do.
+
+| | Docker stack | Running the API directly |
+| --- | --- | --- |
+| Host and port | `localhost:5432` (`DB_PORT` in `.env`) | `localhost:5432` |
+| Database | `jsonstore` | `jsonstore` |
+| User / password | from `.env` | your OS user, no password |
+
+From a terminal, without leaving the stack:
+
+```bash
+docker compose exec postgres psql -U jsonstore -d jsonstore
+
+\dt                        -- the tables: profile, flyway_schema_history
+\d profile                 -- its columns and indexes
+select name, jsonb_object_keys(payload) as document from profile;
+select jsonb_pretty(payload -> 'orders-api') from profile where name = '…';
+```
+
+In a GUI client (DBeaver, DataGrip, pgAdmin), create a PostgreSQL connection with the values above.
+
+Two queries worth knowing, because they use the `jsonb` column rather than working around it:
+
+```sql
+-- every profile that feeds the payments system with a declined card
+select name from profile where payload -> 'payments' @> '{"payment": {"outcome": "declined"}}';
+
+-- what each profile expects to happen
+select name, payload -> 'assertions' ->> 'status' as expected from profile;
+```
+
+## API documentation
+
+The running service describes itself: <http://localhost:8080/swagger-ui.html> for the interactive
+viewer, <http://localhost:8080/v3/api-docs> for the OpenAPI description a client generator can read.
+Both are reachable without a token — they describe the API and expose no data.
+
 ## Configuration
 
 | Variable | Default | Notes |
@@ -135,7 +174,8 @@ All endpoints need a bearer token except `POST /api/auth/login`.
 curl -s localhost:8080/api/profiles -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"name":"Checkout — gift card","tags":["checkout"],
-       "payload":{"scenario":"checkout","payment":{"method":"gift-card"},"expected":{"status":"paid"}}}'
+       "payload":{"orders-api":{"basket":{"lines":[{"sku":"NEST-01"}]}},
+                  "payments":{"payment":{"method":"gift-card"}}}}'
 ```
 
 Errors always come back in one shape, and JSON syntax errors carry the position that broke:
@@ -154,9 +194,9 @@ Because the inputs are `jsonb`, you can query inside them from SQL — which pro
 particular outcome, for instance:
 
 ```sql
-select name, payload -> 'expected' ->> 'status' as expected_status
+select name, payload -> 'assertions' ->> 'status' as expected_status
 from profile
-where payload @> '{"scenario": "checkout"}';
+where payload -> 'orders-api' @> '{"scenario": "checkout"}';
 ```
 
 ## Deploying with Helm
@@ -288,7 +328,8 @@ so that one needs a Docker daemon.
 ## Template catalogue
 
 `GET /api/templates` returns `src/main/resources/templates/catalog.json`: fragments grouped into a
-required scenario and optional customer, payment, delivery and expectation modules, each with the fields
+scenario and optional customer, payment, delivery and expectation modules, each naming the system it
+feeds with `target`, each with the fields
 it needs and a body containing `${field}` placeholders. The browser merges the chosen fragments —
 objects deeply, lists by appending — substitutes the values, and stores the result as one profile. A
 string that is exactly one placeholder keeps the field's type, so `"quantity": "${quantity}"` is stored

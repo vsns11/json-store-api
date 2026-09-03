@@ -42,6 +42,10 @@ public class TemplateCatalog {
             if (id.isBlank() || fragment.path("group").asText("").isBlank() || !fragment.path("body").isObject()) {
                 throw new IllegalStateException("Template fragment '" + id + "' needs an id, a group and an object body");
             }
+            // Which system's document this fragment contributes to.
+            if (fragment.path("target").asText("").isBlank()) {
+                throw new IllegalStateException("Template fragment '" + id + "' needs a target document");
+            }
         }
     }
 }

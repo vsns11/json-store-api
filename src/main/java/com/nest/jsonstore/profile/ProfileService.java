@@ -1,5 +1,6 @@
 package com.nest.jsonstore.profile;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.nest.jsonstore.config.LimitsProperties;
 import com.nest.jsonstore.profile.dto.ProfileRequest;
 import com.nest.jsonstore.profile.dto.ProfileResponse;
@@ -7,6 +8,7 @@ import com.nest.jsonstore.profile.dto.ProfileSummary;
 import com.nest.jsonstore.profile.dto.PageResponse;
 import com.nest.jsonstore.profile.dto.ProfileStats;
 import com.nest.jsonstore.error.ProfileNotFoundException;
+import com.nest.jsonstore.error.InvalidDocumentsException;
 import com.nest.jsonstore.error.PayloadTooLargeException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -96,9 +98,23 @@ public class ProfileService {
         return repository.count() == 0 ? null : repository.lastUpdatedAt();
     }
 
-    /** Sizes the inputs once and refuses anything over the configured limit. */
+    /**
+     * Checks the inputs and returns their stored size. The inputs are a set of named documents —
+     * one per system the scenario feeds — so an object with at least one entry is the only shape
+     * that makes sense.
+     */
     private int checkedSize(ProfileRequest request) {
-        int size = mapper.sizeOf(request.payload());
+        JsonNode payload = request.payload();
+        if (!payload.isObject() || payload.isEmpty()) {
+            throw new InvalidDocumentsException("The inputs must name at least one document, for example {\"main\": {...}}");
+        }
+        payload.fieldNames().forEachRemaining(name -> {
+            if (name.isBlank()) {
+                throw new InvalidDocumentsException("Every document needs a name");
+            }
+        });
+
+        int size = mapper.sizeOf(payload);
         if (size > limits.maxPayloadBytes()) {
             throw new PayloadTooLargeException(size, limits.maxPayloadBytes());
         }

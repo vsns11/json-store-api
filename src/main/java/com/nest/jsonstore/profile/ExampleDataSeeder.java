@@ -32,25 +32,25 @@ class ExampleDataSeeder {
                             "A card that clears first time, one item in the basket",
                             List.of("checkout", "smoke"),
                             """
-                            {"customer":{"id":"cus_1042","country":"NL","loyaltyTier":"gold"},
-                             "basket":[{"sku":"NEST-01","qty":1,"unitPrice":4999}],
-                             "payment":{"method":"card","brand":"visa","outcome":"approved"},
-                             "expected":{"status":"paid","emails":["order-confirmation"]}}"""),
+                            {"orders-api":{"customer":{"id":"cus_1042","country":"NL","loyaltyTier":"gold"},
+                                            "basket":[{"sku":"NEST-01","qty":1,"unitPrice":4999}]},
+                             "payments":{"method":"card","brand":"visa","outcome":"approved"},
+                             "assertions":{"status":"paid","emails":["order-confirmation"]}}"""),
                     example(json, mapper, "Checkout — expired card",
                             "The card is refused, so the order must stay unpaid",
                             List.of("checkout", "negative"),
                             """
-                            {"customer":{"id":"cus_1042","country":"NL","loyaltyTier":"gold"},
-                             "basket":[{"sku":"NEST-01","qty":1,"unitPrice":4999}],
-                             "payment":{"method":"card","brand":"visa","outcome":"expired_card"},
-                             "expected":{"status":"payment_failed","emails":[]}}"""),
+                            {"orders-api":{"customer":{"id":"cus_1042","country":"NL","loyaltyTier":"gold"},
+                                            "basket":[{"sku":"NEST-01","qty":1,"unitPrice":4999}]},
+                             "payments":{"method":"card","brand":"visa","outcome":"expired_card"},
+                             "assertions":{"status":"payment_failed","emails":[]}}"""),
                     example(json, mapper, "Bulk import — 10k rows",
                             "Inputs for the nightly importer under load",
                             List.of("import", "load"),
                             """
-                            {"source":{"bucket":"acme-imports","key":"2026-09-01/orders.csv"},
-                             "rows":10000,"batchSize":500,"stopOnError":false,
-                             "expected":{"imported":9998,"rejected":2,"maxDurationSeconds":180}}"""));
+                            {"orders-api":{"source":{"bucket":"acme-imports","key":"2026-09-01/orders.csv"},
+                                            "rows":10000,"batchSize":500,"stopOnError":false},
+                             "assertions":{"imported":9998,"rejected":2,"maxDurationSeconds":180}}"""));
 
             repository.saveAll(examples);
             log.info("Seeded {} example profiles into an empty database", examples.size());

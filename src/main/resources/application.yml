@@ -102,6 +102,13 @@ management:
     env:
       enabled: true
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  # The description follows the same rules as the API: a token is needed for everything but sign-in.
+  api-docs:
+    path: /v3/api-docs
+
 app:
   # Example documents are inserted into an empty database outside the prod profile.
   seed-examples: ${SEED_EXAMPLES:true}

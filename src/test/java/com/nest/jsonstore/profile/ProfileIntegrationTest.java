@@ -92,9 +92,9 @@ class ProfileIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Topology","tags":["infra"],
-                                 "payload":{"services":[{"name":"api","region":"eu-west"}],"active":true}}"""))
+                                 "payload":{"main":{"services":[{"name":"api","region":"eu-west"}],"active":true}}}"""))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.sizeBytes").value(62))
+                .andExpect(jsonPath("$.sizeBytes").value(71))
                 .andReturn()
                 .getResponse()
                 .getContentAsString()
@@ -102,9 +102,9 @@ class ProfileIntegrationTest {
 
         // Stored as a jsonb object, so PostgreSQL can read inside it.
         String type = jdbcTemplate.queryForObject(
-                "select jsonb_typeof(payload) from profile where id = ?::uuid", String.class, id);
+                "select jsonb_typeof(payload -> 'main') from profile where id = ?::uuid", String.class, id);
         String region = jdbcTemplate.queryForObject(
-                "select payload -> 'services' -> 0 ->> 'region' from profile where id = ?::uuid", String.class, id);
+                "select payload -> 'main' -> 'services' -> 0 ->> 'region' from profile where id = ?::uuid", String.class, id);
         assertThat(type).isEqualTo("object");
         assertThat(region).isEqualTo("eu-west");
 
@@ -128,7 +128,7 @@ class ProfileIntegrationTest {
         String id = mockMvc.perform(as(post("/api/profiles"), alice)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Composed","payload":{"scenario":"checkout"},
+                                {"name":"Composed","payload":{"main":{"scenario":"checkout"}},
                                  "template":{"selection":{"scenario":"checkout","payment":"card-approved"},
                                              "values":{"scenarioName":"Composed","quantity":2}}}"""))
                 .andExpect(status().isCreated())
@@ -146,7 +146,7 @@ class ProfileIntegrationTest {
         mockMvc.perform(as(post("/api/profiles"), alice)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"By hand","payload":{"a":1}}"""))
+                                {"name":"By hand","payload":{"main":{"a":1}}}"""))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.template").doesNotExist());
     }
@@ -158,11 +158,11 @@ class ProfileIntegrationTest {
 
         mockMvc.perform(as(post("/api/profiles"), alice).contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"name":"Smoke one","tags":["smoke","checkout"],"payload":{"note":"regression lives here too"}}"""))
+                        {"name":"Smoke one","tags":["smoke","checkout"],"payload":{"main":{"note":"regression lives here too"}}}"""))
                 .andExpect(status().isCreated());
         mockMvc.perform(as(post("/api/profiles"), alice).contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"name":"Regression one","tags":["regression"],"payload":{"note":"x"}}"""))
+                        {"name":"Regression one","tags":["regression"],"payload":{"main":{"note":"x"}}}"""))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(as(get("/api/profiles").param("tag", "smoke"), alice))
@@ -184,13 +184,50 @@ class ProfileIntegrationTest {
 
     @Test
     void rejectsPayloadsOverTheConfiguredLimit() throws Exception {
-        String oversized = "{\"blob\":\"" + "x".repeat(500) + "\"}";
+        String oversized = "{\"main\":{\"blob\":\"" + "x".repeat(500) + "\"}}";
 
         mockMvc.perform(as(post("/api/profiles"), tokenFor("alice"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Too big\",\"payload\":%s}".formatted(oversized)))
                 .andExpect(status().isPayloadTooLarge())
                 .andExpect(jsonPath("$.error").value("Payload too large"));
+    }
+
+    /** A profile can feed several systems, each with its own document. */
+    @Test
+    void storesOneDocumentPerSystem() throws Exception {
+        String alice = tokenFor("alice");
+
+        mockMvc.perform(as(post("/api/profiles"), alice).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Two systems","payload":{
+                                   "orders-api":{"order":{"sku":"NEST-01"}},
+                                   "payments":{"charge":{"amountMinor":4999}}}}"""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.payload['orders-api'].order.sku").value("NEST-01"))
+                .andExpect(jsonPath("$.payload.payments.charge.amountMinor").value(4999));
+
+        mockMvc.perform(as(get("/api/profiles").param("search", "Two systems"), alice))
+                .andExpect(status().isOk())
+                // Sorted, because PostgreSQL does not keep the order the keys were written in.
+                .andExpect(jsonPath("$.items[0].documents", org.hamcrest.Matchers.contains("orders-api", "payments")));
+    }
+
+    /** Inputs that are not a set of named documents are refused with a message that says so. */
+    @Test
+    void refusesInputsThatAreNotNamedDocuments() throws Exception {
+        String alice = tokenFor("alice");
+
+        mockMvc.perform(as(post("/api/profiles"), alice).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Bare","payload":{}}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid inputs"));
+
+        mockMvc.perform(as(post("/api/profiles"), alice).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Bare","payload":[1,2,3]}"""))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
