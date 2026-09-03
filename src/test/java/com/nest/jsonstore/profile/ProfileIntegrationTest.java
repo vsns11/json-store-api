@@ -27,7 +27,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * the roles that come from LDAP groups, Flyway migrations, the jsonb mapping, payload-inclusive
  * search and the size limit. Requires a working Docker daemon.
  */
-@SpringBootTest(properties = {"app.seed-examples=false", "app.limits.max-payload-bytes=400"})
+@SpringBootTest(properties = {
+        "app.seed-examples=false",
+        "app.limits.max-payload-bytes=400",
+        // A free port, so the suite runs whether or not the application is already running locally.
+        "spring.ldap.embedded.port=0",
+})
 @AutoConfigureMockMvc
 @Testcontainers
 class ProfileIntegrationTest {
