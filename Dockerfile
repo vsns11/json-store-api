@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # Both base images can be swapped for internal ones:
 #   docker build --build-arg BUILD_IMAGE=my-registry/openjdk-maven:21 .
 ARG BUILD_IMAGE=maven:3.9-eclipse-temurin-21

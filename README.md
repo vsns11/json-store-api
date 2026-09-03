@@ -218,6 +218,9 @@ every log line for that request.
 docker build -t json-store-api:1.0.0 .
 ```
 
+The build needs nothing from Docker Hub beyond the two base images — there is no `# syntax=` directive
+pulling a frontend — so it works behind a proxy that only mirrors what you have allowed.
+
 Both base images are build arguments, so an internal image can be used instead — including an OpenJDK
 image that already contains Maven:
 
