@@ -50,6 +50,9 @@ class ProfileIntegrationTest {
     @Autowired
     ObjectMapper objectMapper;
 
+    @Autowired
+    com.nest.jsonstore.template.TemplateComposer composer;
+
     /** Signs in against the embedded directory and returns the bearer token. */
     private String tokenFor(String username) throws Exception {
         String body = mockMvc.perform(post("/api/auth/login")
@@ -233,6 +236,29 @@ class ProfileIntegrationTest {
                         .content("""
                                 {"name":"Bare","payload":[1,2,3]}"""))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * The seeded examples are composed from the catalogue, so they demonstrate the multi-system
+     * shape and cannot drift away from what the form would build.
+     */
+    @Test
+    void seedsExamplesComposedFromTheCatalogue() {
+        var composed = composer.compose(
+                java.util.Map.of("scenario", "checkout", "payment", "card-declined"),
+                java.util.Map.of("orderRef", "ORD-777"));
+
+        // One scenario and one payment fragment already feed four systems.
+        assertThat(composed.documents().fieldNames()).toIterable()
+                .contains("orders-api", "kafka-events", "assertions", "payments");
+        assertThat(composed.documents().at("/orders-api/body/reference").asText()).isEqualTo("ORD-777");
+        assertThat(composed.documents().at("/kafka-events/key").asText()).isEqualTo("ORD-777");
+        // A placeholder that stands alone keeps the field's own type.
+        assertThat(composed.documents().at("/orders-api/body/lines/0/quantity").isNumber()).isTrue();
+
+        assertThat(composed.documents().at("/payments/body/simulate").asText()).isEqualTo("declined");
+        // The values that produced it are kept too, which is what the form reopens with.
+        assertThat(composed.values().get("orderRef").asText()).isEqualTo("ORD-777");
     }
 
     @Test

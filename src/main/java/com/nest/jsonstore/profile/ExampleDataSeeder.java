@@ -1,6 +1,8 @@
 package com.nest.jsonstore.profile;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.nest.jsonstore.template.TemplateComposer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
@@ -9,9 +11,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Puts a few example profiles in an empty database so a fresh environment has something to show.
+ * They are composed from the template catalogue rather than written out here, so they always match
+ * what the form would produce and each one feeds several systems.
+ *
  * Never runs under the {@code prod} profile, and never touches a database that already has data.
  */
 @Configuration
@@ -21,46 +27,64 @@ class ExampleDataSeeder {
 
     private static final Logger log = LoggerFactory.getLogger(ExampleDataSeeder.class);
 
+    /** name, description, tags, which fragment per group, and the values that differ from the defaults. */
+    private record Example(String name, String description, List<String> tags,
+                           Map<String, String> selection, Map<String, Object> values) {
+    }
+
+    private static final List<Example> EXAMPLES = List.of(
+            new Example("Checkout — happy path",
+                    "Card clears, stock is reserved, both notifications go out",
+                    List.of("checkout", "smoke"),
+                    Map.of("scenario", "checkout", "customer", "returning-customer",
+                            "payment", "card-approved", "fulfilment", "stock-reserved",
+                            "notification", "email-and-sms", "expectations", "expect-success"),
+                    Map.of("scenarioName", "Checkout — happy path", "orderRef", "ORD-10042")),
+
+            new Example("Checkout — expired card",
+                    "The issuer refuses the charge, so nothing ships",
+                    List.of("checkout", "negative"),
+                    Map.of("scenario", "checkout", "customer", "returning-customer",
+                            "payment", "card-declined", "notification", "email-only",
+                            "expectations", "expect-failure"),
+                    Map.of("scenarioName", "Checkout — expired card", "orderRef", "ORD-10043",
+                            "declineCode", "expired_card")),
+
+            new Example("Bulk import — 10k rows",
+                    "A file pushed through the importer overnight",
+                    List.of("import", "load"),
+                    Map.of("scenario", "bulk-import", "expectations", "expect-success"),
+                    Map.of("scenarioName", "Bulk import — 10k rows", "rows", 10000, "batchSize", 500)),
+
+            new Example("Renewal — backordered item",
+                    "A renewal for a plan whose item is out of stock",
+                    List.of("subscription", "edge"),
+                    Map.of("scenario", "subscription-renewal", "customer", "new-customer",
+                            "payment", "bank-transfer", "fulfilment", "backorder",
+                            "expectations", "expect-success"),
+                    Map.of("scenarioName", "Renewal — backordered item", "planCode", "TEAM-YEARLY")));
+
     @Bean
-    ApplicationRunner seedExamples(ProfileRepository repository, ProfileMapper mapper, ObjectMapper json) {
+    ApplicationRunner seedExamples(ProfileRepository repository, ProfileMapper mapper,
+                                   TemplateComposer composer, ObjectMapper json) {
         return args -> {
             if (repository.count() > 0) {
                 return;
             }
-            List<Profile> examples = List.of(
-                    example(json, mapper, "Checkout — happy path",
-                            "A card that clears first time, one item in the basket",
-                            List.of("checkout", "smoke"),
-                            """
-                            {"orders-api":{"customer":{"id":"cus_1042","country":"NL","loyaltyTier":"gold"},
-                                            "basket":[{"sku":"NEST-01","qty":1,"unitPrice":4999}]},
-                             "payments":{"method":"card","brand":"visa","outcome":"approved"},
-                             "assertions":{"status":"paid","emails":["order-confirmation"]}}"""),
-                    example(json, mapper, "Checkout — expired card",
-                            "The card is refused, so the order must stay unpaid",
-                            List.of("checkout", "negative"),
-                            """
-                            {"orders-api":{"customer":{"id":"cus_1042","country":"NL","loyaltyTier":"gold"},
-                                            "basket":[{"sku":"NEST-01","qty":1,"unitPrice":4999}]},
-                             "payments":{"method":"card","brand":"visa","outcome":"expired_card"},
-                             "assertions":{"status":"payment_failed","emails":[]}}"""),
-                    example(json, mapper, "Bulk import — 10k rows",
-                            "Inputs for the nightly importer under load",
-                            List.of("import", "load"),
-                            """
-                            {"orders-api":{"source":{"bucket":"acme-imports","key":"2026-09-01/orders.csv"},
-                                            "rows":10000,"batchSize":500,"stopOnError":false},
-                             "assertions":{"imported":9998,"rejected":2,"maxDurationSeconds":180}}"""));
 
-            repository.saveAll(examples);
-            log.info("Seeded {} example profiles into an empty database", examples.size());
+            List<Profile> profiles = EXAMPLES.stream().map(example -> {
+                TemplateComposer.Composition composed = composer.compose(example.selection(), example.values());
+
+                ObjectNode template = json.createObjectNode();
+                template.set("selection", json.valueToTree(example.selection()));
+                template.set("values", composed.values());
+
+                return new Profile(example.name(), example.description(), example.tags(),
+                        composed.documents(), mapper.sizeOf(composed.documents()), template);
+            }).toList();
+
+            repository.saveAll(profiles);
+            log.info("Seeded {} example profiles, composed from the template catalogue", profiles.size());
         };
-    }
-
-    private static Profile example(ObjectMapper json, ProfileMapper mapper, String name,
-                                                              String description, List<String> tags, String inputs)
-            throws Exception {
-        var parsed = json.readTree(inputs);
-        return new Profile(name, description, tags, parsed, mapper.sizeOf(parsed), null);
     }
 }

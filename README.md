@@ -44,7 +44,7 @@ createdb jsonstore
 That is the whole thing. It connects to `localhost:5432/jsonstore` as your operating-system user with
 no password, which is what a stock Homebrew or apt PostgreSQL gives you, applies its migrations, and
 starts an in-process LDAP server so there is a directory to sign in against. An empty database also
-gets three example profiles.
+gets four example profiles, composed from the template catalogue so they match what the form builds.
 
 Check it came up:
 
