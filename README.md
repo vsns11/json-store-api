@@ -326,6 +326,26 @@ objects deeply, lists by appending — substitutes the values, and stores the re
 string that is exactly one placeholder keeps the field's type, so `"quantity": "${quantity}"` is stored
 as a number.
 
+A fragment writes into **every system it names**, so one scenario can already produce an API request,
+an event on the bus and the assertions for the run:
+
+```json
+{
+  "id": "checkout", "group": "scenario", "name": "Checkout",
+  "fields": [ { "key": "orderRef", "label": "Order reference", "type": "text", "default": "ORD-10042" } ],
+  "documents": {
+    "orders-api":   { "method": "POST", "path": "/v2/orders", "body": { "reference": "${orderRef}" } },
+    "kafka-events": { "topic": "orders.events", "key": "${orderRef}" },
+    "assertions":   { "order": { "reference": "${orderRef}" } }
+  }
+}
+```
+
+Fields are shared by key across fragments, so a value typed once reaches every document that mentions
+it — the SKU from the scenario ends up in the inventory reservation without being asked for twice.
+The catalogue that ships covers six systems: `orders-api`, `payments`, `inventory`, `kafka-events`,
+`notifications` and `assertions`.
+
 Each field declares a `type`, which decides the control the browser draws: `text`, `textarea`, `number`,
 `range`, `date`, `select`, `radio`, `switch`, `checkbox`, `checkboxes` or `tags`. Together with `label`,
 `default`, `required`, `help` and — where it applies — `options`, `min`, `max` and `step`, that is the

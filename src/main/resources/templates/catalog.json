@@ -1,5 +1,37 @@
 {
-  "version": 1,
+  "version": 2,
+  "documents": [
+    {
+      "id": "orders-api",
+      "label": "Orders API",
+      "description": "The request the shop's API receives"
+    },
+    {
+      "id": "payments",
+      "label": "Payments",
+      "description": "What the payment provider is asked to do"
+    },
+    {
+      "id": "inventory",
+      "label": "Inventory",
+      "description": "Stock reservations for the order"
+    },
+    {
+      "id": "kafka-events",
+      "label": "Kafka events",
+      "description": "The event published on the bus"
+    },
+    {
+      "id": "notifications",
+      "label": "Notifications",
+      "description": "Messages the customer should receive"
+    },
+    {
+      "id": "assertions",
+      "label": "Assertions",
+      "description": "What the run is expected to produce"
+    }
+  ],
   "groups": [
     {
       "id": "scenario",
@@ -16,8 +48,12 @@
       "label": "Payment"
     },
     {
-      "id": "delivery",
-      "label": "Delivery"
+      "id": "fulfilment",
+      "label": "Fulfilment"
+    },
+    {
+      "id": "notification",
+      "label": "Notifications"
     },
     {
       "id": "expectations",
@@ -28,7 +64,6 @@
     {
       "id": "checkout",
       "group": "scenario",
-      "target": "orders-api",
       "name": "Checkout",
       "description": "One basket taken through to payment",
       "fields": [
@@ -50,6 +85,12 @@
             "prod-mirror"
           ],
           "default": "staging"
+        },
+        {
+          "key": "orderRef",
+          "label": "Order reference",
+          "type": "text",
+          "default": "ORD-10042"
         },
         {
           "key": "currency",
@@ -96,37 +137,47 @@
           "default": [
             "express-pay"
           ]
-        },
-        {
-          "key": "notes",
-          "label": "Notes for whoever runs this",
-          "type": "textarea",
-          "rows": 2,
-          "default": ""
         }
       ],
-      "body": {
-        "scenario": "checkout",
-        "name": "${scenarioName}",
-        "environment": "${environment}",
-        "featureFlags": "${featureFlags}",
-        "notes": "${notes}",
-        "basket": {
-          "currency": "${currency}",
-          "lines": [
-            {
-              "sku": "${sku}",
-              "quantity": "${quantity}",
-              "unitPriceMinor": "${unitPriceMinor}"
-            }
-          ]
+      "documents": {
+        "orders-api": {
+          "method": "POST",
+          "path": "/v2/orders",
+          "body": {
+            "reference": "${orderRef}",
+            "environment": "${environment}",
+            "featureFlags": "${featureFlags}",
+            "currency": "${currency}",
+            "lines": [
+              {
+                "sku": "${sku}",
+                "quantity": "${quantity}",
+                "unitPriceMinor": "${unitPriceMinor}"
+              }
+            ]
+          }
+        },
+        "kafka-events": {
+          "topic": "orders.events",
+          "key": "${orderRef}",
+          "value": {
+            "type": "order.created",
+            "reference": "${orderRef}",
+            "currency": "${currency}"
+          }
+        },
+        "assertions": {
+          "scenario": "${scenarioName}",
+          "order": {
+            "reference": "${orderRef}",
+            "lines": 1
+          }
         }
       }
     },
     {
       "id": "bulk-import",
       "group": "scenario",
-      "target": "orders-api",
       "name": "Bulk import",
       "description": "A file pushed through the importer",
       "fields": [
@@ -178,25 +229,42 @@
           "default": false
         }
       ],
-      "body": {
-        "scenario": "bulk-import",
-        "name": "${scenarioName}",
-        "environment": "${environment}",
-        "source": {
-          "bucket": "acme-imports",
-          "key": "${sourceKey}"
+      "documents": {
+        "orders-api": {
+          "method": "POST",
+          "path": "/v2/orders/import",
+          "body": {
+            "environment": "${environment}",
+            "source": {
+              "bucket": "acme-imports",
+              "key": "${sourceKey}"
+            },
+            "batch": {
+              "rows": "${rows}",
+              "size": "${batchSize}",
+              "stopOnError": "${stopOnError}"
+            }
+          }
         },
-        "batch": {
-          "rows": "${rows}",
-          "size": "${batchSize}",
-          "stopOnError": "${stopOnError}"
+        "kafka-events": {
+          "topic": "imports.events",
+          "key": "${sourceKey}",
+          "value": {
+            "type": "import.started",
+            "rows": "${rows}"
+          }
+        },
+        "assertions": {
+          "scenario": "${scenarioName}",
+          "import": {
+            "rows": "${rows}"
+          }
         }
       }
     },
     {
       "id": "subscription-renewal",
       "group": "scenario",
-      "target": "orders-api",
       "name": "Subscription renewal",
       "description": "A renewal charged on its due date",
       "fields": [
@@ -252,21 +320,36 @@
           "default": true
         }
       ],
-      "body": {
-        "scenario": "subscription-renewal",
-        "name": "${scenarioName}",
-        "environment": "${environment}",
-        "subscription": {
-          "plan": "${planCode}",
-          "renewsOn": "${renewalDate}",
-          "autoRenew": "${autoRenew}"
+      "documents": {
+        "orders-api": {
+          "method": "POST",
+          "path": "/v2/subscriptions/renew",
+          "body": {
+            "environment": "${environment}",
+            "plan": "${planCode}",
+            "renewsOn": "${renewalDate}",
+            "autoRenew": "${autoRenew}"
+          }
+        },
+        "kafka-events": {
+          "topic": "billing.events",
+          "key": "${planCode}",
+          "value": {
+            "type": "subscription.renewal.due",
+            "renewsOn": "${renewalDate}"
+          }
+        },
+        "assertions": {
+          "scenario": "${scenarioName}",
+          "subscription": {
+            "plan": "${planCode}"
+          }
         }
       }
     },
     {
       "id": "returning-customer",
       "group": "customer",
-      "target": "orders-api",
       "name": "Returning customer",
       "description": "An account with order history",
       "fields": [
@@ -275,6 +358,12 @@
           "label": "Customer id",
           "type": "text",
           "default": "cus_1042"
+        },
+        {
+          "key": "email",
+          "label": "Email",
+          "type": "text",
+          "default": "ada@example.com"
         },
         {
           "key": "country",
@@ -301,22 +390,37 @@
           "default": "gold"
         }
       ],
-      "body": {
-        "customer": {
-          "type": "returning",
-          "id": "${customerId}",
-          "country": "${country}",
-          "loyaltyTier": "${loyaltyTier}"
+      "documents": {
+        "orders-api": {
+          "body": {
+            "customer": {
+              "type": "returning",
+              "id": "${customerId}",
+              "country": "${country}",
+              "loyaltyTier": "${loyaltyTier}"
+            }
+          }
+        },
+        "notifications": {
+          "recipient": {
+            "email": "${email}",
+            "locale": "${country}"
+          }
         }
       }
     },
     {
       "id": "new-customer",
       "group": "customer",
-      "target": "orders-api",
       "name": "New customer",
       "description": "First order, no history",
       "fields": [
+        {
+          "key": "email",
+          "label": "Email",
+          "type": "text",
+          "default": "new.person@example.com"
+        },
         {
           "key": "country",
           "label": "Country",
@@ -337,18 +441,28 @@
           "default": false
         }
       ],
-      "body": {
-        "customer": {
-          "type": "new",
-          "country": "${country}",
-          "marketingOptIn": "${marketingOptIn}"
+      "documents": {
+        "orders-api": {
+          "body": {
+            "customer": {
+              "type": "new",
+              "country": "${country}",
+              "marketingOptIn": "${marketingOptIn}"
+            }
+          }
+        },
+        "notifications": {
+          "recipient": {
+            "email": "${email}",
+            "locale": "${country}"
+          },
+          "subscribe": "${marketingOptIn}"
         }
       }
     },
     {
       "id": "card-approved",
       "group": "payment",
-      "target": "payments",
       "name": "Card \u2014 approved",
       "description": "The card clears first time",
       "fields": [
@@ -370,19 +484,29 @@
           "default": "4242"
         }
       ],
-      "body": {
-        "payment": {
-          "method": "card",
-          "brand": "${cardBrand}",
-          "last4": "${cardLast4}",
-          "outcome": "approved"
+      "documents": {
+        "payments": {
+          "method": "POST",
+          "path": "/charges",
+          "body": {
+            "instrument": {
+              "type": "card",
+              "brand": "${cardBrand}",
+              "last4": "${cardLast4}"
+            },
+            "simulate": "approved"
+          }
+        },
+        "assertions": {
+          "payment": {
+            "outcome": "approved"
+          }
         }
       }
     },
     {
       "id": "card-declined",
       "group": "payment",
-      "target": "payments",
       "name": "Card \u2014 declined",
       "description": "The issuer refuses the charge",
       "fields": [
@@ -409,19 +533,30 @@
           "default": "expired_card"
         }
       ],
-      "body": {
-        "payment": {
-          "method": "card",
-          "brand": "${cardBrand}",
-          "outcome": "declined",
-          "declineCode": "${declineCode}"
+      "documents": {
+        "payments": {
+          "method": "POST",
+          "path": "/charges",
+          "body": {
+            "instrument": {
+              "type": "card",
+              "brand": "${cardBrand}"
+            },
+            "simulate": "declined",
+            "declineCode": "${declineCode}"
+          }
+        },
+        "assertions": {
+          "payment": {
+            "outcome": "declined",
+            "code": "${declineCode}"
+          }
         }
       }
     },
     {
       "id": "bank-transfer",
       "group": "payment",
-      "target": "payments",
       "name": "Bank transfer",
       "description": "Paid out of band, settles later",
       "fields": [
@@ -446,21 +581,40 @@
           "step": 6
         }
       ],
-      "body": {
-        "payment": {
-          "method": "bank-transfer",
-          "scheme": "${bankScheme}",
-          "settlementDelayHours": "${settlementDelayHours}"
+      "documents": {
+        "payments": {
+          "method": "POST",
+          "path": "/transfers",
+          "body": {
+            "scheme": "${bankScheme}",
+            "settlementDelayHours": "${settlementDelayHours}"
+          }
+        },
+        "assertions": {
+          "payment": {
+            "outcome": "pending",
+            "settlesWithinHours": "${settlementDelayHours}"
+          }
         }
       }
     },
     {
-      "id": "standard-shipping",
-      "group": "delivery",
-      "target": "orders-api",
-      "name": "Standard shipping",
-      "description": "Delivered to the billing address",
+      "id": "stock-reserved",
+      "group": "fulfilment",
+      "name": "Stock reserved",
+      "description": "The warehouse holds the items",
       "fields": [
+        {
+          "key": "warehouse",
+          "label": "Warehouse",
+          "type": "select",
+          "options": [
+            "ams-1",
+            "lon-2",
+            "fra-3"
+          ],
+          "default": "ams-1"
+        },
         {
           "key": "carrier",
           "label": "Carrier",
@@ -479,49 +633,169 @@
           "default": 3,
           "min": 1,
           "max": 30
-        },
-        {
-          "key": "signatureRequired",
-          "label": "Signature on delivery",
-          "type": "checkbox",
-          "checkboxLabel": "Required",
-          "default": false
         }
       ],
-      "body": {
-        "delivery": {
-          "mode": "standard",
-          "carrier": "${carrier}",
-          "promisedDays": "${promisedDays}",
-          "signatureRequired": "${signatureRequired}"
+      "documents": {
+        "inventory": {
+          "method": "POST",
+          "path": "/reservations",
+          "body": {
+            "warehouse": "${warehouse}",
+            "sku": "${sku}",
+            "quantity": "${quantity}"
+          }
+        },
+        "orders-api": {
+          "body": {
+            "fulfilment": {
+              "carrier": "${carrier}",
+              "promisedDays": "${promisedDays}"
+            }
+          }
+        },
+        "assertions": {
+          "inventory": {
+            "reserved": true,
+            "warehouse": "${warehouse}"
+          }
         }
       }
     },
     {
-      "id": "pickup-point",
-      "group": "delivery",
-      "target": "orders-api",
-      "name": "Pickup point",
-      "description": "Collected from a shop",
+      "id": "backorder",
+      "group": "fulfilment",
+      "name": "Backordered",
+      "description": "Nothing in stock, the order waits",
       "fields": [
         {
-          "key": "pickupPointId",
-          "label": "Pickup point id",
-          "type": "text",
-          "default": "pp-8841"
+          "key": "warehouse",
+          "label": "Warehouse",
+          "type": "select",
+          "options": [
+            "ams-1",
+            "lon-2",
+            "fra-3"
+          ],
+          "default": "ams-1"
+        },
+        {
+          "key": "restockDate",
+          "label": "Expected restock",
+          "type": "date",
+          "default": "2026-10-15"
         }
       ],
-      "body": {
-        "delivery": {
-          "mode": "pickup",
-          "pointId": "${pickupPointId}"
+      "documents": {
+        "inventory": {
+          "method": "POST",
+          "path": "/reservations",
+          "body": {
+            "warehouse": "${warehouse}",
+            "sku": "${sku}",
+            "quantity": "${quantity}",
+            "allowBackorder": true
+          }
+        },
+        "orders-api": {
+          "body": {
+            "fulfilment": {
+              "status": "backordered",
+              "restockOn": "${restockDate}"
+            }
+          }
+        },
+        "assertions": {
+          "inventory": {
+            "reserved": false,
+            "backordered": true
+          }
+        }
+      }
+    },
+    {
+      "id": "email-only",
+      "group": "notification",
+      "name": "Email only",
+      "description": "One confirmation email",
+      "fields": [
+        {
+          "key": "emailTemplate",
+          "label": "Email template",
+          "type": "text",
+          "default": "order-confirmation"
+        }
+      ],
+      "documents": {
+        "notifications": {
+          "send": [
+            {
+              "channel": "email",
+              "template": "${emailTemplate}"
+            }
+          ]
+        },
+        "assertions": {
+          "notifications": {
+            "emails": [
+              "${emailTemplate}"
+            ],
+            "sms": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "email-and-sms",
+      "group": "notification",
+      "name": "Email and SMS",
+      "description": "Confirmation by both channels",
+      "fields": [
+        {
+          "key": "emailTemplate",
+          "label": "Email template",
+          "type": "text",
+          "default": "order-confirmation"
+        },
+        {
+          "key": "smsTemplate",
+          "label": "SMS template",
+          "type": "text",
+          "default": "order-confirmation-sms"
+        },
+        {
+          "key": "phone",
+          "label": "Phone",
+          "type": "text",
+          "default": "+31 6 1234 5678"
+        }
+      ],
+      "documents": {
+        "notifications": {
+          "send": [
+            {
+              "channel": "email",
+              "template": "${emailTemplate}"
+            },
+            {
+              "channel": "sms",
+              "template": "${smsTemplate}",
+              "to": "${phone}"
+            }
+          ]
+        },
+        "assertions": {
+          "notifications": {
+            "emails": [
+              "${emailTemplate}"
+            ],
+            "sms": 1
+          }
         }
       }
     },
     {
       "id": "expect-success",
       "group": "expectations",
-      "target": "assertions",
       "name": "Expect success",
       "description": "The run should finish cleanly",
       "fields": [
@@ -541,8 +815,8 @@
           "help": "Enter to add each one"
         }
       ],
-      "body": {
-        "expected": {
+      "documents": {
+        "assertions": {
           "outcome": "success",
           "status": "${expectedStatus}",
           "emails": "${expectedEmails}"
@@ -552,7 +826,6 @@
     {
       "id": "expect-failure",
       "group": "expectations",
-      "target": "assertions",
       "name": "Expect failure",
       "description": "The run should stop with an error",
       "fields": [
@@ -581,29 +854,14 @@
           "default": ""
         }
       ],
-      "body": {
-        "expected": {
+      "documents": {
+        "assertions": {
           "outcome": "failure",
           "status": "${expectedStatus}",
           "error": "${expectedError}",
-          "notes": "${failureNotes}",
-          "emails": []
+          "notes": "${failureNotes}"
         }
       }
-    }
-  ],
-  "documents": [
-    {
-      "id": "orders-api",
-      "label": "Orders API"
-    },
-    {
-      "id": "payments",
-      "label": "Payments"
-    },
-    {
-      "id": "assertions",
-      "label": "Assertions"
     }
   ]
 }

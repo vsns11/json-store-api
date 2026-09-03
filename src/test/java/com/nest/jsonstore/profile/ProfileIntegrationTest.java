@@ -251,6 +251,8 @@ class ProfileIntegrationTest {
                 .andExpect(jsonPath("$.groups[0].required").value(true))
                 .andExpect(jsonPath("$.fragments[0].group").isNotEmpty())
                 .andExpect(jsonPath("$.fragments[0].fields").isArray())
-                .andExpect(jsonPath("$.fragments[0].body").isMap());
+                // Each fragment writes one document per system it feeds.
+                .andExpect(jsonPath("$.fragments[0].documents").isMap())
+                .andExpect(jsonPath("$.documents").isArray());
     }
 }

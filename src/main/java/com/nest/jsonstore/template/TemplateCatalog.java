@@ -39,13 +39,21 @@ public class TemplateCatalog {
         }
         for (JsonNode fragment : fragments) {
             String id = fragment.path("id").asText("");
-            if (id.isBlank() || fragment.path("group").asText("").isBlank() || !fragment.path("body").isObject()) {
-                throw new IllegalStateException("Template fragment '" + id + "' needs an id, a group and an object body");
+            if (id.isBlank() || fragment.path("group").asText("").isBlank()) {
+                throw new IllegalStateException("Template fragment '" + id + "' needs an id and a group");
             }
-            // Which system's document this fragment contributes to.
-            if (fragment.path("target").asText("").isBlank()) {
-                throw new IllegalStateException("Template fragment '" + id + "' needs a target document");
+
+            // A fragment writes into one document per system it feeds, keyed by the system's name.
+            JsonNode documents = fragment.path("documents");
+            if (!documents.isObject() || documents.isEmpty()) {
+                throw new IllegalStateException("Template fragment '" + id + "' needs at least one document");
             }
+            documents.fields().forEachRemaining(entry -> {
+                if (!entry.getValue().isObject()) {
+                    throw new IllegalStateException(
+                            "Template fragment '" + id + "' writes a non-object into '" + entry.getKey() + "'");
+                }
+            });
         }
     }
 }
