@@ -53,6 +53,18 @@ curl -s localhost:8080/api/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"alice","password":"secret"}'
 ```
 
+Sign-in answers with the token and who it belongs to. Send it back as `Authorization: Bearer <accessToken>`.
+
+```json
+{
+  "accessToken": "eyJhbGciOi...",
+  "tokenType": "Bearer",
+  "expiresIn": 28800,
+  "expiresAt": "2026-01-01T09:00:00Z",
+  "user": { "username": "alice", "roles": ["ADMINS", "DEVELOPERS"] }
+}
+```
+
 Override any of the connection details with the environment variables below — a different host, a real
 username and password, a different database name.
 
@@ -131,7 +143,7 @@ Both are reachable without a token — they describe the API and expose no data.
 | `DB_USER` `DB_PASSWORD` | OS username, empty | Required under the `prod` profile |
 | `DB_POOL_MAX` `DB_POOL_MIN` | `16` `4` | Per instance — see scaling below |
 | `SERVER_PORT` `MANAGEMENT_PORT` | `8080` `8081` | Actuator listens on its own port |
-| `CORS_ORIGINS` | `http://localhost:5173,…` | Only needed when the UI is on another origin |
+| `CORS_ORIGINS` | `http://localhost:[*],…` | Origins the browser app is served from; an entry may be a pattern |
 | `MAX_PAYLOAD_BYTES` `MAX_PAGE_SIZE` | `1048576` `100` | Request guard rails |
 | `TOMCAT_MAX_THREADS` `TOMCAT_MAX_CONNECTIONS` | `200` `10000` | |
 | `SPRING_PROFILES_ACTIVE` | — | Set to `prod` in production |
@@ -147,11 +159,14 @@ Both are reachable without a token — they describe the API and expose no data.
 
 ## API
 
-All endpoints need a bearer token except `POST /api/auth/login`.
+All endpoints need a bearer token except `POST /api/auth/login`. A request without one is answered
+`401` with `WWW-Authenticate: Bearer`; a valid token without the right group gets `403`. Both carry
+the same JSON error shape as everything else.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/api/auth/login` | `{username, password}` — binds to LDAP, returns a token and roles |
+| `POST` | `/api/auth/login` | `{username, password}` — binds to LDAP, returns the token below |
+| `POST` | `/api/auth/refresh` | A new token for a caller who already holds a valid one |
 | `GET` | `/api/auth/me` | Who the token belongs to |
 | `GET` | `/api/templates` | The catalogue of input fragments the composer merges |
 | `GET` | `/api/profiles` | `search`, `tag`, `page`, `size`, `sort`, `direction`; returns summaries |

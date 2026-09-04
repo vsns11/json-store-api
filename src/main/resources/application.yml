@@ -126,8 +126,10 @@ app:
       group-search-base: ${LDAP_GROUP_SEARCH_BASE:ou=groups}
       group-search-filter: ${LDAP_GROUP_SEARCH_FILTER:(member={0})}
   cors:
-    # Comma-separated list of the origins the browser app is served from.
-    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+    # Comma-separated list of the origins the browser app is served from. An entry may be an exact
+    # origin or a pattern, e.g. http://localhost:[*] for any port while developing. Production
+    # names its real origins (see application-prod.yml).
+    allowed-origins: ${CORS_ORIGINS:http://localhost:[*],http://127.0.0.1:[*]}
   limits:
     # Rejects oversized documents before they reach the database.
     max-payload-bytes: ${MAX_PAYLOAD_BYTES:1048576}

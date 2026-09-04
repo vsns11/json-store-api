@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -63,7 +64,7 @@ class ProfileIntegrationTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        return objectMapper.readTree(body).get("token").asText();
+        return objectMapper.readTree(body).get("accessToken").asText();
     }
 
     private static MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder request, String token) {
@@ -72,12 +73,57 @@ class ProfileIntegrationTest {
 
     @Test
     void refusesAnyoneWithoutAToken() throws Exception {
-        mockMvc.perform(get("/api/profiles")).andExpect(status().isUnauthorized());
+        // A caller with no token is told so in the same error shape every other endpoint uses,
+        // and in the header RFC 6750 defines for a bearer-token API.
+        mockMvc.perform(get("/api/profiles"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, "Bearer"))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        mockMvc.perform(as(get("/api/profiles"), "not-a-real-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"alice","password":"wrong"}"""))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Wrong username or password"));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"","password":""}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors").isNotEmpty());
+    }
+
+    @Test
+    void handsOutABearerTokenTheStandardWay() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"alice","password":"secret"}"""))
+                .andExpect(status().isOk())
+                // Tokens are credentials, so no cache may keep a copy.
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").isNumber())
+                .andExpect(jsonPath("$.user.username").value("alice"))
+                .andExpect(jsonPath("$.user.roles", org.hamcrest.Matchers.hasItem("ADMINS")));
+    }
+
+    @Test
+    void exchangesAValidTokenForANewOne() throws Exception {
+        mockMvc.perform(as(post("/api/auth/refresh"), tokenFor("bob")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.user.username").value("bob"));
+
+        mockMvc.perform(post("/api/auth/refresh")).andExpect(status().isUnauthorized());
     }
 
     @Test

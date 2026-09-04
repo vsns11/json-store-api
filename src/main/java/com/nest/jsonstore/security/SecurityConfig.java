@@ -45,7 +45,8 @@ class SecurityConfig {
     // Spring MVC also publishes a CorsConfigurationSource, so the parameter is named after the
     // bean below to say which of the two is wanted.
     SecurityFilterChain apiFilterChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource,
-                                       JwtAuthenticationConverter jwtConverter) throws Exception {
+                                       JwtAuthenticationConverter jwtConverter,
+                                       SecurityErrorHandler errors) throws Exception {
         return http
                 .securityMatcher("/api/**")
                 .cors(customizer -> customizer.configurationSource(corsConfigurationSource))
@@ -58,14 +59,28 @@ class SecurityConfig {
                         // Deleting a profile is reserved for the admin group in the directory.
                         .requestMatchers(HttpMethod.DELETE, "/api/profiles/**").hasRole("ADMINS")
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter)))
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))
+                        .authenticationEntryPoint(errors)
+                        .accessDeniedHandler(errors))
+                // The same answers for requests that never reach the resource-server filter.
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint(errors)
+                        .accessDeniedHandler(errors))
                 .build();
     }
 
     @Bean
     CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(corsProperties.allowedOrigins());
+        // An entry may be an exact origin or a pattern such as http://localhost:[*], which is
+        // what a developer running the app on whatever port is free needs.
+        List<String> origins = corsProperties.allowedOrigins();
+        if (origins.stream().anyMatch(origin -> origin.contains("*"))) {
+            configuration.setAllowedOriginPatterns(origins);
+        } else {
+            configuration.setAllowedOrigins(origins);
+        }
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("X-Request-Id"));

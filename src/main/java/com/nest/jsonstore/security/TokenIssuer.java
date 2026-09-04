@@ -1,7 +1,6 @@
 package com.nest.jsonstore.security;
 
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
@@ -10,7 +9,6 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.List;
 
 /** Turns a successful LDAP bind into a bearer token the browser can carry. */
 @Component
@@ -25,27 +23,24 @@ public class TokenIssuer {
     }
 
     public IssuedToken issue(Authentication authentication) {
+        AuthenticatedUser user = AuthenticatedUser.of(authentication);
         Instant now = Instant.now();
         Instant expiresAt = now.plus(properties.jwt().ttl());
-        List<String> roles = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .map(authority -> authority.startsWith("ROLE_") ? authority.substring(5) : authority)
-                .sorted()
-                .toList();
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("json-store")
                 .issuedAt(now)
                 .expiresAt(expiresAt)
-                .subject(authentication.getName())
-                .claim("roles", roles)
+                .subject(user.username())
+                .claim("roles", user.roles())
                 .build();
 
-        String token = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+        String value = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
                 .getTokenValue();
-        return new IssuedToken(token, authentication.getName(), roles, expiresAt);
+        return new IssuedToken(value, expiresAt, user);
     }
 
-    public record IssuedToken(String token, String username, List<String> roles, Instant expiresAt) {
+    /** A signed token and the identity inside it. */
+    public record IssuedToken(String value, Instant expiresAt, AuthenticatedUser user) {
     }
 }
