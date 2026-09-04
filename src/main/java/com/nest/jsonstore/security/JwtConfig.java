@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -33,9 +34,15 @@ class JwtConfig {
         return new NimbusJwtEncoder(new ImmutableSecret<>(key.getEncoded()));
     }
 
+    /**
+     * Besides the signature and the expiry, the issuer is checked: a token minted by another
+     * service that happens to share the secret is not a token for this one.
+     */
     @Bean
     JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
+        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(TokenIssuer.ISSUER));
+        return decoder;
     }
 
     /** Turns the token's `roles` claim back into Spring Security authorities. */

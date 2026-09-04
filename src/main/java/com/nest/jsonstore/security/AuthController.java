@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -52,12 +53,17 @@ class AuthController {
 
     /**
      * A fresh token for a caller who already has a valid one, so a long session does not have to
-     * ask for the password again.
+     * ask for the password again — up to a point: a sign-in cannot be stretched past
+     * {@code app.security.jwt.max-session}, after which the password is asked for once more.
      */
     @Operation(summary = "Exchange a valid token for a new one")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "A new token, with the same identity and roles"),
+            @ApiResponse(responseCode = "401", description = "No valid token, or the sign-in is too old to renew")
+    })
     @PostMapping("/refresh")
-    ResponseEntity<TokenResponse> refresh(Authentication authentication) {
-        return tokenResponse(tokenIssuer.issue(authentication));
+    ResponseEntity<TokenResponse> refresh(JwtAuthenticationToken authentication) {
+        return tokenResponse(tokenIssuer.renew(authentication));
     }
 
     @Operation(summary = "Who the caller is, according to the token they sent")

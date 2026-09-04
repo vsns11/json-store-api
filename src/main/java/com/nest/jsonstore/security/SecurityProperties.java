@@ -1,19 +1,27 @@
 package com.nest.jsonstore.security;
 
+import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 import java.time.Duration;
 
 /**
  * How users are authenticated, configured under {@code app.security}.
  *
- * @param jwt  signing secret and lifetime of the token handed to the browser
+ * @param jwt  signing secret and lifetimes of the token handed to the browser
  * @param ldap where users and their groups live in the directory
  */
+@Validated
 @ConfigurationProperties(prefix = "app.security")
-public record SecurityProperties(Jwt jwt, Ldap ldap) {
+public record SecurityProperties(@NotNull Jwt jwt, @NotNull Ldap ldap) {
 
-    public record Jwt(String secret, Duration ttl) {
+    /**
+     * @param secret     HMAC key the tokens are signed with; at least 32 characters
+     * @param ttl        how long one token is valid
+     * @param maxSession how long a sign-in may be kept alive by refreshing, counted from the bind
+     */
+    public record Jwt(String secret, @NotNull Duration ttl, @NotNull Duration maxSession) {
     }
 
     /**

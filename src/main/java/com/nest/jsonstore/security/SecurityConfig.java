@@ -28,6 +28,9 @@ import java.util.List;
 @EnableConfigurationProperties(SecurityProperties.class)
 class SecurityConfig {
 
+    /** The OpenAPI description and its viewer: the contract, readable without a token. */
+    private static final String[] DOCS = {"/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**"};
+
     /**
      * Actuator has its own chain: it listens on a separate port that is never published, and
      * Kubernetes probes cannot present a token.
@@ -41,14 +44,19 @@ class SecurityConfig {
                 .build();
     }
 
+    /**
+     * Everything else. There is deliberately no path this chain does not cover: a request that
+     * matched no chain would pass through with no security at all, so the rule for an endpoint
+     * nobody thought about is "needs a token", the same as for the ones everybody did.
+     */
     @Bean
+    @Order(1)
     // Spring MVC also publishes a CorsConfigurationSource, so the parameter is named after the
     // bean below to say which of the two is wanted.
     SecurityFilterChain apiFilterChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource,
                                        JwtAuthenticationConverter jwtConverter,
                                        SecurityErrorHandler errors) throws Exception {
         return http
-                .securityMatcher("/api/**")
                 .cors(customizer -> customizer.configurationSource(corsConfigurationSource))
                 // No cookies and no session, so there is no CSRF surface to protect.
                 .csrf(csrf -> csrf.disable())
@@ -56,6 +64,8 @@ class SecurityConfig {
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
+                        .requestMatchers(DOCS).permitAll()
+                        .requestMatchers("/error").permitAll()
                         // Deleting a profile is reserved for the admin group in the directory.
                         .requestMatchers(HttpMethod.DELETE, "/api/profiles/**").hasRole("ADMINS")
                         .anyRequest().authenticated())
@@ -82,7 +92,7 @@ class SecurityConfig {
             configuration.setAllowedOrigins(origins);
         }
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id"));
         configuration.setExposedHeaders(List.of("X-Request-Id"));
         configuration.setMaxAge(Duration.ofHours(1));
 
