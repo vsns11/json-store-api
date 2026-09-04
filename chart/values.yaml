@@ -21,6 +21,9 @@ config:
   DB_NAME: jsonstore
   DB_POOL_MAX: "16"
   MAX_PAYLOAD_BYTES: "1048576"
+  MAX_REQUEST_BYTES: "8388608"
+  JWT_TTL: PT8H
+  JWT_MAX_SESSION: PT24H
   CORS_ORIGINS: ""     # leave empty when a Route or Ingress serves the UI on this host
   LDAP_URL: ldaps://ldap.example.com:636
   LDAP_BASE: dc=example,dc=com

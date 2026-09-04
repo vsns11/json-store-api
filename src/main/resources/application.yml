@@ -116,7 +116,10 @@ app:
     jwt:
       # Must be at least 32 characters. Production supplies its own (see application-prod.yml).
       secret: ${JWT_SECRET:development-only-secret-not-for-production-use}
+      # How long one token lasts. The browser renews it before it runs out, but only for as long
+      # as max-session allows, counted from the moment the password was typed.
       ttl: ${JWT_TTL:PT8H}
+      max-session: ${JWT_MAX_SESSION:PT24H}
     ldap:
       # Bind pattern for the username. Leave empty to search instead.
       user-dn-patterns: ${LDAP_USER_DN_PATTERNS:uid={0},ou=people}
@@ -131,8 +134,11 @@ app:
     # names its real origins (see application-prod.yml).
     allowed-origins: ${CORS_ORIGINS:http://localhost:[*],http://127.0.0.1:[*]}
   limits:
-    # Rejects oversized documents before they reach the database.
+    # Rejects oversized inputs before they reach the database. The payload limit is measured on the
+    # minified inputs; the request limit is what a body may announce on the wire, and is checked
+    # before anything is read, so a client cannot make a replica parse a hundred megabytes.
     max-payload-bytes: ${MAX_PAYLOAD_BYTES:1048576}
+    max-request-bytes: ${MAX_REQUEST_BYTES:8388608}
     max-page-size: ${MAX_PAGE_SIZE:100}
 
 logging:

@@ -144,7 +144,8 @@ Both are reachable without a token — they describe the API and expose no data.
 | `DB_POOL_MAX` `DB_POOL_MIN` | `16` `4` | Per instance — see scaling below |
 | `SERVER_PORT` `MANAGEMENT_PORT` | `8080` `8081` | Actuator listens on its own port |
 | `CORS_ORIGINS` | `http://localhost:[*],…` | Origins the browser app is served from; an entry may be a pattern |
-| `MAX_PAYLOAD_BYTES` `MAX_PAGE_SIZE` | `1048576` `100` | Request guard rails |
+| `MAX_PAYLOAD_BYTES` `MAX_PAGE_SIZE` | `1048576` `100` | Largest inputs per profile (minified), largest page |
+| `MAX_REQUEST_BYTES` | `8388608` | Largest request body at all; refused on its length before it is read |
 | `TOMCAT_MAX_THREADS` `TOMCAT_MAX_CONNECTIONS` | `200` `10000` | |
 | `SPRING_PROFILES_ACTIVE` | — | Set to `prod` in production |
 | `LDAP_URL` | embedded server | Required under `prod` |
@@ -154,19 +155,21 @@ Both are reachable without a token — they describe the API and expose no data.
 | `LDAP_USER_SEARCH_BASE` `LDAP_USER_SEARCH_FILTER` | empty, `(uid={0})` | Used when no DN pattern is set |
 | `LDAP_GROUP_SEARCH_BASE` `LDAP_GROUP_SEARCH_FILTER` | `ou=groups`, `(member={0})` | Membership becomes a role |
 | `JWT_SECRET` | dev default | Required under `prod`; at least 32 characters |
-| `JWT_TTL` | `PT8H` | How long a sign-in lasts |
+| `JWT_TTL` | `PT8H` | How long one token lasts; the browser renews it before it runs out |
+| `JWT_MAX_SESSION` | `PT24H` | How long a sign-in can be kept alive by renewing, counted from the bind |
 | `SEED_EXAMPLES` | `true` | Example profiles for an empty DB; ignored under `prod` |
 
 ## API
 
 All endpoints need a bearer token except `POST /api/auth/login`. A request without one is answered
 `401` with `WWW-Authenticate: Bearer`; a valid token without the right group gets `403`. Both carry
-the same JSON error shape as everything else.
+the same JSON error shape as everything else. The rule covers every path, not only `/api`: the only
+things readable without a token are the OpenAPI description and its viewer.
 
 | Method | Path | Notes |
 | --- | --- | --- |
 | `POST` | `/api/auth/login` | `{username, password}` — binds to LDAP, returns the token below |
-| `POST` | `/api/auth/refresh` | A new token for a caller who already holds a valid one |
+| `POST` | `/api/auth/refresh` | A new token for a caller who already holds a valid one, until `JWT_MAX_SESSION` is up |
 | `GET` | `/api/auth/me` | Who the token belongs to |
 | `GET` | `/api/templates` | The catalogue of input fragments the composer merges |
 | `GET` | `/api/profiles` | `search`, `tag`, `page`, `size`, `sort`, `direction`; returns summaries |

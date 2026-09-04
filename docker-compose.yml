@@ -39,6 +39,8 @@ services:
       LDAP_MANAGER_DN: cn=admin,dc=example,dc=com
       LDAP_MANAGER_PASSWORD: ${LDAP_ADMIN_PASSWORD:-admin}
       JWT_SECRET: ${JWT_SECRET:-local-compose-secret-change-me-please-32+}
+      JWT_TTL: ${JWT_TTL:-PT8H}
+      JWT_MAX_SESSION: ${JWT_MAX_SESSION:-PT24H}
     ports:
       - '${API_PORT:-8080}:8080'
     depends_on:

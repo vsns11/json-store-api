@@ -31,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "app.seed-examples=false",
         "app.limits.max-payload-bytes=400",
+        "app.limits.max-request-bytes=2000",
         // A free port, so the suite runs whether or not the application is already running locally.
         "spring.ldap.embedded.port=0",
 })
@@ -69,6 +70,18 @@ class ProfileIntegrationTest {
 
     private static MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder request, String token) {
         return request.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+    }
+
+    /** Creates a profile as alice and returns its id. */
+    private String create(String token, String body) throws Exception {
+        String response = mockMvc.perform(as(post("/api/profiles"), token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(response).get("id").asText();
     }
 
     @Test
@@ -142,17 +155,11 @@ class ProfileIntegrationTest {
     void storesThePayloadAsRealJsonbAndFindsItByItsContents() throws Exception {
         String alice = tokenFor("alice");
 
-        String id = mockMvc.perform(as(post("/api/profiles"), alice)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Topology","tags":["infra"],
-                                 "payload":{"main":{"services":[{"name":"api","region":"eu-west"}],"active":true}}}"""))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.sizeBytes").value(71))
-                .andReturn()
-                .getResponse()
-                .getContentAsString()
-                .replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+        String id = create(alice, """
+                {"name":"Topology","tags":["infra"],
+                 "payload":{"main":{"services":[{"name":"api","region":"eu-west"}],"active":true}}}""");
+        mockMvc.perform(as(get("/api/profiles/{id}", id), alice))
+                .andExpect(jsonPath("$.sizeBytes").value(71));
 
         // Stored as a jsonb object, so PostgreSQL can read inside it.
         String type = jdbcTemplate.queryForObject(
@@ -179,17 +186,10 @@ class ProfileIntegrationTest {
     void remembersTheTemplateAProfileWasComposedFrom() throws Exception {
         String alice = tokenFor("alice");
 
-        String id = mockMvc.perform(as(post("/api/profiles"), alice)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Composed","payload":{"main":{"scenario":"checkout"}},
-                                 "template":{"selection":{"scenario":"checkout","payment":"card-approved"},
-                                             "values":{"scenarioName":"Composed","quantity":2}}}"""))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString()
-                .replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+        String id = create(alice, """
+                {"name":"Composed","payload":{"main":{"scenario":"checkout"}},
+                 "template":{"selection":{"scenario":"checkout","payment":"card-approved"},
+                             "values":{"scenarioName":"Composed","quantity":2}}}""");
 
         mockMvc.perform(as(get("/api/profiles/{id}", id), alice))
                 .andExpect(status().isOk())
@@ -326,5 +326,91 @@ class ProfileIntegrationTest {
                 // Each fragment writes one document per system it feeds.
                 .andExpect(jsonPath("$.fragments[0].documents").isMap())
                 .andExpect(jsonPath("$.documents").isArray());
+    }
+
+    /** A template is stored next to the inputs and handed straight back to the form, so its shape is checked. */
+    @Test
+    void refusesATemplateThatIsNotASelectionPlusValues() throws Exception {
+        String alice = tokenFor("alice");
+
+        mockMvc.perform(as(post("/api/profiles"), alice).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Odd","payload":{"main":{"a":1}},"template":"checkout"}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid template"));
+
+        mockMvc.perform(as(post("/api/profiles"), alice).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Odd","payload":{"main":{"a":1}},
+                                 "template":{"selection":{"scenario":42},"values":{}}}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid template"));
+    }
+
+    /** A search term is text, not a pattern: "100%" finds the characters, not everything. */
+    @Test
+    void treatsWildcardCharactersInASearchAsText() throws Exception {
+        String alice = tokenFor("alice");
+        create(alice, """
+                {"name":"Discount 100%","payload":{"main":{"note":"a"}}}""");
+        create(alice, """
+                {"name":"Discount 10","payload":{"main":{"note":"b"}}}""");
+
+        mockMvc.perform(as(get("/api/profiles").param("search", "100%"), alice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].name").value("Discount 100%"));
+
+        // An underscore would otherwise match any single character.
+        mockMvc.perform(as(get("/api/profiles").param("search", "count_1"), alice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(0));
+    }
+
+    /** A body with the right JSON but the wrong shape names the field instead of a Java type. */
+    @Test
+    void namesTheFieldWhenTheBodyHasTheWrongShape() throws Exception {
+        mockMvc.perform(as(post("/api/profiles"), tokenFor("alice")).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Shape","tags":"not-a-list","payload":{"main":{}}}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid request"))
+                .andExpect(jsonPath("$.message").value("'tags' has the wrong type"));
+
+        mockMvc.perform(as(post("/api/profiles"), tokenFor("alice")).contentType(MediaType.TEXT_PLAIN)
+                        .content("name=Shape"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.status").value(415));
+    }
+
+    /** A body over the request limit is refused on its length alone, before it is parsed at all. */
+    @Test
+    void refusesABodyThatIsTooBigToEvenRead() throws Exception {
+        mockMvc.perform(as(post("/api/profiles"), tokenFor("alice"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"" + "x".repeat(3000) + "\"}"))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.error").value("Payload too large"))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("2,000 byte limit")));
+    }
+
+    /** The request id a client sends is echoed back — cleaned, cut, and never the cause of a failure. */
+    @Test
+    void echoesASanitisedRequestId() throws Exception {
+        mockMvc.perform(as(get("/api/profiles"), tokenFor("bob")).header("X-Request-Id", "trace.42/abc"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Request-Id", "trace42abc"));
+
+        mockMvc.perform(as(get("/api/profiles"), tokenFor("bob")).header("X-Request-Id", "!!!"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Request-Id", org.hamcrest.Matchers.matchesRegex("[0-9a-f-]{36}")));
+    }
+
+    /** Nothing outside /api slips through without a token, except the API's own description. */
+    @Test
+    void coversEveryPathWithTheSameRule() throws Exception {
+        mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+        mockMvc.perform(get("/somewhere/else")).andExpect(status().isUnauthorized());
+        mockMvc.perform(as(get("/somewhere/else"), tokenFor("bob"))).andExpect(status().isNotFound());
     }
 }

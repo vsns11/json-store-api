@@ -2,6 +2,7 @@ package com.nest.jsonstore.profile;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nest.jsonstore.config.CorsProperties;
+import com.nest.jsonstore.config.LimitsProperties;
 import com.nest.jsonstore.profile.dto.ProfileResponse;
 import com.nest.jsonstore.error.ProfileNotFoundException;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // A pure controller slice: authentication is covered by the integration test instead.
 @WebMvcTest(ProfileController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@EnableConfigurationProperties(CorsProperties.class)
+@EnableConfigurationProperties({CorsProperties.class, LimitsProperties.class})
 @EnableAutoConfiguration(exclude = org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration.class)
 class ProfileControllerTest {
 
