@@ -14,6 +14,8 @@ import com.nest.jsonstore.profile.dto.ProfileSummary;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -66,7 +68,8 @@ public class ProfileService {
                 normalizeTags(request.tags()),
                 request.payload(),
                 checkedSize(request),
-                checkedTemplate(request.template()));
+                checkedTemplate(request.template()),
+                actor());
         // Flush so the generated id, timestamps and version are in the entity before it is mapped.
         return mapper.toResponse(repository.saveAndFlush(profile));
     }
@@ -80,7 +83,8 @@ public class ProfileService {
                 normalizeTags(request.tags()),
                 request.payload(),
                 checkedSize(request),
-                checkedTemplate(request.template()));
+                checkedTemplate(request.template()),
+                actor());
         // Flush so the timestamps and version are in the entity before it is mapped.
         return mapper.toResponse(repository.saveAndFlush(profile));
     }
@@ -162,6 +166,16 @@ public class ProfileService {
                 .distinct()
                 .limit(MAX_TAGS)
                 .toList();
+    }
+
+    /**
+     * Who is making this change, from the token rather than the request body: a client cannot
+     * claim to be someone else, and there is nothing to validate. Null when there is no
+     * authenticated caller at all, which outside tests the filter chain does not allow.
+     */
+    private static String actor() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null || !authentication.isAuthenticated() ? null : authentication.getName();
     }
 
     private static String trimToNull(String value) {

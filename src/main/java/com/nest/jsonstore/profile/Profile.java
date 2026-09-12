@@ -45,6 +45,17 @@ public class Profile {
     @Column(name = "size_bytes", nullable = false)
     private int sizeBytes;
 
+    /**
+     * Who signed in and wrote this, by directory username. Null on profiles stored before the
+     * columns existed, which is why nothing here falls back to "unknown" or to the current user:
+     * a name that was never recorded must not be rendered as though it had been.
+     */
+    @Column(name = "created_by", length = 120, updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by", length = 120)
+    private String updatedBy;
+
     /** The template selection this was composed from, or null if the inputs were written by hand. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
@@ -67,13 +78,15 @@ public class Profile {
     }
 
     public Profile(String name, String description, List<String> tags, JsonNode payload, int sizeBytes,
-                   JsonNode template) {
-        apply(name, description, tags, payload, sizeBytes, template);
+                   JsonNode template, String actor) {
+        this.createdBy = actor;
+        apply(name, description, tags, payload, sizeBytes, template, actor);
     }
 
     /** Applies the mutable part of the profile in one shot, so callers cannot leave it half-updated. */
     public void apply(String name, String description, List<String> tags, JsonNode payload, int sizeBytes,
-                      JsonNode template) {
+                      JsonNode template, String actor) {
+        this.updatedBy = actor;
         this.name = name;
         this.description = description;
         this.tags = tags == null ? List.of() : List.copyOf(tags);
@@ -104,6 +117,14 @@ public class Profile {
 
     public int getSizeBytes() {
         return sizeBytes;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
     }
 
     public JsonNode getTemplate() {

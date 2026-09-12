@@ -79,8 +79,10 @@ class ExampleDataSeeder {
                 template.set("selection", json.valueToTree(example.selection()));
                 template.set("values", composed.values());
 
+                // The seeder is not a person, and saying it was one would put a name in the audit
+                // trail that never signed in. These rows show no author, like any that predate it.
                 return new Profile(example.name(), example.description(), example.tags(),
-                        composed.documents(), mapper.sizeOf(composed.documents()), template);
+                        composed.documents(), mapper.sizeOf(composed.documents()), template, null);
             }).toList();
 
             repository.saveAll(profiles);

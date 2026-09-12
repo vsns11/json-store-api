@@ -48,7 +48,7 @@ class ProfileControllerTest {
         UUID id = UUID.randomUUID();
         given(service.create(any())).willReturn(new ProfileResponse(
                 id, "Config", null, List.of("infra"), objectMapper.readTree("{\"a\":1}"), null, 7, 0,
-                Instant.EPOCH, Instant.EPOCH));
+                "alice", "alice", Instant.EPOCH, Instant.EPOCH));
 
         mockMvc.perform(post("/api/profiles")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -16,6 +16,8 @@ public record ProfileResponse(
         JsonNode template,
         int sizeBytes,
         long version,
+        String createdBy,
+        String updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {

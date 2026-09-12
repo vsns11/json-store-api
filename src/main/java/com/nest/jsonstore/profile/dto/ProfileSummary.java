@@ -14,6 +14,7 @@ public record ProfileSummary(
         List<String> documents,
         String preview,
         int sizeBytes,
+        String updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {

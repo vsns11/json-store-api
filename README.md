@@ -174,7 +174,7 @@ things readable without a token are the OpenAPI description and its viewer.
 | `GET` | `/api/templates` | The catalogue of input fragments the composer merges |
 | `GET` | `/api/profiles` | `search`, `tag`, `page`, `size`, `sort`, `direction`; returns summaries |
 | `GET` | `/api/profiles/stats` | Profile count, total input bytes, last change |
-| `GET` | `/api/profiles/{id}` | One profile including its inputs |
+| `GET` | `/api/profiles/{id}` | One profile including its inputs, and who wrote it |
 | `POST` | `/api/profiles` | Create · `201` with the stored profile |
 | `PUT` | `/api/profiles/{id}` | Replace name, description, tags and inputs |
 | `DELETE` | `/api/profiles/{id}` | `204` — requires the admins group |
@@ -198,6 +198,12 @@ Errors always come back in one shape, and JSON syntax errors carry the position 
   "location": { "line": 1, "column": 28 }
 }
 ```
+
+Every profile records who wrote it. `createdBy` and `updatedBy` are directory usernames taken from
+the verified token, never from the request body, so a client cannot claim to be another account; a
+`updatedBy` sent in the body is ignored. Both are null on profiles stored before the columns existed
+and on the seeded examples, because a name that was never recorded must not be rendered as one that
+was. `updatedBy` is on the list response too, so a table can show it without opening each row.
 
 Because the inputs are `jsonb`, you can query inside them from SQL — which profiles expect a
 particular outcome, for instance:

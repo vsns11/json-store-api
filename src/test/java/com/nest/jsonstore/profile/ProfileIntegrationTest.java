@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -412,5 +413,43 @@ class ProfileIntegrationTest {
         mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
         mockMvc.perform(get("/somewhere/else")).andExpect(status().isUnauthorized());
         mockMvc.perform(as(get("/somewhere/else"), tokenFor("bob"))).andExpect(status().isNotFound());
+    }
+
+    /**
+     * A shared store needs to say who changed a scenario. The name comes from the token, so a
+     * client cannot claim to be someone else, and a row written before the columns existed shows
+     * no author rather than a guessed one.
+     */
+    @Test
+    void recordsWhoWroteEachProfile() throws Exception {
+        String alice = tokenFor("alice");
+        String id = create(alice, """
+                {"name":"Authored","payload":{"main":{"a":1}}}""");
+
+        mockMvc.perform(as(get("/api/profiles/{id}", id), alice))
+                .andExpect(jsonPath("$.createdBy").value("alice"))
+                .andExpect(jsonPath("$.updatedBy").value("alice"));
+
+        // bob edits it: the author stays alice, the last hand becomes bob.
+        mockMvc.perform(as(put("/api/profiles/{id}", id), tokenFor("bob"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Authored","payload":{"main":{"a":2}}}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.createdBy").value("alice"))
+                .andExpect(jsonPath("$.updatedBy").value("bob"));
+
+        // The list carries the last hand too, so the table can show it without opening each row.
+        mockMvc.perform(as(get("/api/profiles").param("search", "Authored"), alice))
+                .andExpect(jsonPath("$.items[0].updatedBy").value("bob"));
+
+        // Claiming to be someone else in the body changes nothing: the name is read from the token.
+        mockMvc.perform(as(put("/api/profiles/{id}", id), tokenFor("bob"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Authored","updatedBy":"alice","createdBy":"alice",
+                                 "payload":{"main":{"a":3}}}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updatedBy").value("bob"));
     }
 }

@@ -32,6 +32,8 @@ class ProfileMapper {
                 profile.getTemplate(),
                 profile.getSizeBytes(),
                 profile.getVersion(),
+                profile.getCreatedBy(),
+                profile.getUpdatedBy(),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt());
     }
@@ -45,6 +47,7 @@ class ProfileMapper {
                 documentNames(profile.getPayload()),
                 preview(profile.getPayload()),
                 profile.getSizeBytes(),
+                profile.getUpdatedBy(),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt());
     }
