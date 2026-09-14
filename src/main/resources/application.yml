@@ -42,6 +42,10 @@ spring:
     base: ${LDAP_BASE:dc=example,dc=com}
     username: ${LDAP_MANAGER_DN:}
     password: ${LDAP_MANAGER_PASSWORD:}
+    # Without these a directory that stops answering holds a sign-in request, and its thread, forever.
+    base-environment:
+      "[com.sun.jndi.ldap.connect.timeout]": ${LDAP_CONNECT_TIMEOUT_MS:5000}
+      "[com.sun.jndi.ldap.read.timeout]": ${LDAP_READ_TIMEOUT_MS:10000}
 
   jackson:
     default-property-inclusion: non_null
@@ -134,6 +138,19 @@ app:
       # Group membership becomes a role: cn=admins -> ROLE_ADMINS.
       group-search-base: ${LDAP_GROUP_SEARCH_BASE:ou=groups}
       group-search-filter: ${LDAP_GROUP_SEARCH_FILTER:(member={0})}
+    access:
+      # Directory groups (their cn, any case, comma-separated) that may use JSON Store. Viewers read;
+      # editors also create and change profiles; admins also delete them and run maintenance. An account
+      # in none of these is refused at sign-in, and with none mapped at all the API does not start.
+      viewer-groups: ${ROLE_VIEWER_GROUPS:}
+      editor-groups: ${ROLE_EDITOR_GROUPS:}
+      admin-groups: ${ROLE_ADMIN_GROUPS:}
+      # Recorded as the author of each change, as the directory spells it rather than as it was typed.
+      username-attribute: ${LDAP_USERNAME_ATTRIBUTE:uid}
+      # Wrong passwords one username may try within the window, per replica, before sign-in pauses for
+      # that name. The directory's own lockout policy still applies behind this.
+      max-failed-sign-ins: ${LOGIN_MAX_FAILURES:5}
+      failed-sign-in-window: ${LOGIN_FAILURE_WINDOW:PT5M}
   cors:
     # Comma-separated list of the origins the browser app is served from. An entry may be an exact
     # origin or a pattern, e.g. http://localhost:[*] for any port while developing. Production
@@ -161,7 +178,8 @@ logging:
 # secret and let alice/secret in as an administrator.
 #
 # An in-process LDAP server starts with the test directory in src/main/resources/ldap/users.ldif;
-# sign in as alice/secret or bob/secret.
+# every account's password is "secret". alice is an admin, bob an editor and dave a viewer; carol is in
+# no mapped group, so she is refused.
 spring:
   config:
     activate:
@@ -176,3 +194,7 @@ app:
   security:
     jwt:
       secret: ${JWT_SECRET:development-only-secret-not-for-production-use}
+    access:
+      viewer-groups: ${ROLE_VIEWER_GROUPS:auditors}
+      editor-groups: ${ROLE_EDITOR_GROUPS:developers}
+      admin-groups: ${ROLE_ADMIN_GROUPS:admins}

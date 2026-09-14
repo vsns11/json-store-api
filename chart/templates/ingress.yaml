@@ -4,6 +4,9 @@ kind: Ingress
 metadata:
   name: {{ include "json-store-api.fullname" . }}
   labels: {{- include "json-store-api.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- if .Values.ingress.tls.enabled }}
@@ -17,6 +20,41 @@ spec:
         paths:
           - path: {{ .Values.ingress.path }}
             pathType: Prefix
+            backend:
+              service:
+                name: {{ include "json-store-api.fullname" . }}
+                port:
+                  name: http
+{{- end }}
+{{- if and .Values.ingress.enabled .Values.ingress.signInRateLimit.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "json-store-api.fullname" . }}-sign-in
+  labels: {{- include "json-store-api.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    nginx.ingress.kubernetes.io/limit-rpm: {{ .Values.ingress.signInRateLimit.requestsPerMinute | quote }}
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "1"
+    {{- with .Values.ingress.signInRateLimit.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}/auth/login
+            pathType: Exact
             backend:
               service:
                 name: {{ include "json-store-api.fullname" . }}

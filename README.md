@@ -153,7 +153,11 @@ Both are reachable without a token — they describe the API and expose no data.
 | `LDAP_MANAGER_DN` `LDAP_MANAGER_PASSWORD` | empty | Account used for group lookups |
 | `LDAP_USER_DN_PATTERNS` | `uid={0},ou=people` | Leave empty to search instead |
 | `LDAP_USER_SEARCH_BASE` `LDAP_USER_SEARCH_FILTER` | empty, `(uid={0})` | Used when no DN pattern is set |
-| `LDAP_GROUP_SEARCH_BASE` `LDAP_GROUP_SEARCH_FILTER` | `ou=groups`, `(member={0})` | Membership becomes a role |
+| `LDAP_GROUP_SEARCH_BASE` `LDAP_GROUP_SEARCH_FILTER` | `ou=groups`, `(member={0})` | Where the groups below are looked up |
+| `ROLE_VIEWER_GROUPS` `ROLE_EDITOR_GROUPS` `ROLE_ADMIN_GROUPS` | empty; `auditors`, `developers`, `admins` under `local` | Directory groups (cn, comma-separated) that may read, also write, and also delete. At least one is required; an account in none is refused at sign-in |
+| `LDAP_USERNAME_ATTRIBUTE` | `uid` | The directory's spelling of the username, recorded as author whatever case was typed |
+| `LDAP_CONNECT_TIMEOUT_MS` `LDAP_READ_TIMEOUT_MS` | `5000` `10000` | How long a sign-in waits on the directory before answering `503` |
+| `LOGIN_MAX_FAILURES` `LOGIN_FAILURE_WINDOW` | `5` `PT5M` | Wrong passwords per username, per replica, before sign-in pauses for that name |
 | `JWT_SECRET` | development secret under `local` | Required under any other profile; at least 32 characters. The development secret is refused outside `local`, even if set on purpose |
 | `JWT_TTL` | `PT8H` | How long one token lasts; the browser renews it before it runs out |
 | `JWT_MAX_SESSION` | `PT24H` | How long a sign-in can be kept alive by renewing, counted from the bind |
@@ -162,13 +166,18 @@ Both are reachable without a token — they describe the API and expose no data.
 ## API
 
 All endpoints need a bearer token except `POST /api/auth/login`. A request without one is answered
-`401` with `WWW-Authenticate: Bearer`; a valid token without the right group gets `403`. Both carry
+`401` with `WWW-Authenticate: Bearer`; a valid token without the right role gets `403`.
+
+Signing in proves who someone is; the groups mapped in `ROLE_*_GROUPS` decide what they may do. A
+viewer may read profiles and the catalogue, an editor may also create and change profiles, and an
+admin may also delete them and run maintenance. The roles nest, so an admin is also an editor and a
+viewer. An account in none of the mapped groups is refused at sign-in with `403` and no token. Both carry
 the same JSON error shape as everything else. The rule covers every path, not only `/api`: the only
 things readable without a token are the OpenAPI description and its viewer.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/api/auth/login` | `{username, password}` — binds to LDAP, returns the token below |
+| `POST` | `/api/auth/login` | `{username, password}` — binds to LDAP, returns the token below · `403` in no mapped group, `429` after repeated wrong passwords (with `Retry-After`), `503` when the directory cannot be reached |
 | `POST` | `/api/auth/refresh` | A new token for a caller who already holds a valid one, until `JWT_MAX_SESSION` is up |
 | `GET` | `/api/auth/me` | Who the token belongs to |
 | `GET` | `/api/templates` | The catalogue of input fragments the composer merges |

@@ -132,7 +132,7 @@ class ProfileIntegrationTest {
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.expiresIn").isNumber())
                 .andExpect(jsonPath("$.user.username").value("alice"))
-                .andExpect(jsonPath("$.user.roles", org.hamcrest.Matchers.hasItem("ADMINS")));
+                .andExpect(jsonPath("$.user.roles", org.hamcrest.Matchers.hasItem("ADMIN")));
     }
 
     @Test
@@ -145,16 +145,78 @@ class ProfileIntegrationTest {
         mockMvc.perform(post("/api/auth/refresh")).andExpect(status().isUnauthorized());
     }
 
+    private org.springframework.test.web.servlet.ResultActions signIn(String username, String password) throws Exception {
+        return mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"username":"%s","password":"%s"}""".formatted(username, password)));
+    }
+
+    /** Directory groups become roles, and the roles nest: an admin is also an editor and a viewer. */
     @Test
-    void readsGroupsFromTheDirectory() throws Exception {
+    void mapsDirectoryGroupsToRoles() throws Exception {
         mockMvc.perform(as(get("/api/auth/me"), tokenFor("alice")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("alice"))
-                .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.containsInAnyOrder("ADMINS", "DEVELOPERS")));
+                .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.containsInAnyOrder("ADMIN", "EDITOR", "VIEWER")));
 
         mockMvc.perform(as(get("/api/auth/me"), tokenFor("bob")))
+                .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.containsInAnyOrder("EDITOR", "VIEWER")));
+
+        mockMvc.perform(as(get("/api/auth/me"), tokenFor("dave")))
+                .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.contains("VIEWER")));
+    }
+
+    /** The right password is not enough: an account in no mapped group gets no token at all. */
+    @Test
+    void refusesToSignInAnAccountInNoMappedGroup() throws Exception {
+        signIn("carol", "secret")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.accessToken").doesNotExist())
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("not in a group")));
+    }
+
+    @Test
+    void letsAViewerReadButNotChangeAnything() throws Exception {
+        String dave = tokenFor("dave");
+        String id = create(tokenFor("alice"), checkout("Read only", "ORD-READ-ONLY"));
+
+        mockMvc.perform(as(get("/api/profiles/{id}", id), dave)).andExpect(status().isOk());
+        mockMvc.perform(as(get("/api/profiles"), dave)).andExpect(status().isOk());
+        mockMvc.perform(as(get("/api/templates"), dave)).andExpect(status().isOk());
+
+        mockMvc.perform(as(post("/api/profiles"), dave).contentType(MediaType.APPLICATION_JSON)
+                        .content(checkout("Mine now", "ORD-DAVE")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(as(put("/api/profiles/{id}", id), dave).header(HttpHeaders.IF_MATCH, "*")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(checkout("Mine now", "ORD-DAVE")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(as(get("/api/profiles/{id}", id), dave))
+                .andExpect(jsonPath("$.name").value("Read only"));
+    }
+
+    /** Repeated wrong passwords pause sign-in for that name, and say for how long; other names carry on. */
+    @Test
+    void pausesSignInForANameAfterRepeatedWrongPasswords() throws Exception {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            signIn("mallory", "guess-" + attempt).andExpect(status().isUnauthorized());
+        }
+
+        signIn("mallory", "guess-5")
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists(HttpHeaders.RETRY_AFTER))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("Too many wrong passwords")));
+
+        signIn("bob", "secret").andExpect(status().isOk());
+    }
+
+    /** The author recorded is the directory's spelling of the name, whatever case was typed. */
+    @Test
+    void recordsTheDirectorysSpellingOfTheUsername() throws Exception {
+        signIn("BOB", "secret")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.contains("DEVELOPERS")));
+                .andExpect(jsonPath("$.user.username").value("bob"));
     }
 
     /** The ETag a profile is currently served with, which a change must send back as If-Match. */

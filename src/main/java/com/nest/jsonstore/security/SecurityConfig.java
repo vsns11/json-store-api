@@ -25,7 +25,7 @@ import java.util.List;
  */
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties(SecurityProperties.class)
+@EnableConfigurationProperties({SecurityProperties.class, AccessProperties.class})
 class SecurityConfig {
 
     /** The OpenAPI description and its viewer: the contract, readable without a token. */
@@ -66,10 +66,15 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
                         .requestMatchers(DOCS).permitAll()
                         .requestMatchers("/error").permitAll()
-                        // Deleting a profile is reserved for the admin group in the directory.
-                        .requestMatchers(HttpMethod.DELETE, "/api/profiles/**").hasRole("ADMINS")
+                        // Roles come from directory groups at sign-in (see DirectoryRoles) and nest, so
+                        // each rule names the least role it needs. A token without one gets nothing.
+                        .requestMatchers("/api/auth/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/profiles/**").hasRole(DirectoryRoles.ADMIN)
                         // Maintenance that rewrites stored profiles in bulk.
-                        .requestMatchers("/api/admin/**").hasRole("ADMINS")
+                        .requestMatchers("/api/admin/**").hasRole(DirectoryRoles.ADMIN)
+                        .requestMatchers(HttpMethod.POST, "/api/profiles", "/api/profiles/**").hasRole(DirectoryRoles.EDITOR)
+                        .requestMatchers(HttpMethod.PUT, "/api/profiles/**").hasRole(DirectoryRoles.EDITOR)
+                        .requestMatchers("/api/**").hasRole(DirectoryRoles.VIEWER)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))

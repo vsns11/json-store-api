@@ -1,3 +1,7 @@
+{{- $roles := .Values.config }}
+{{- if not (or $roles.ROLE_VIEWER_GROUPS $roles.ROLE_EDITOR_GROUPS $roles.ROLE_ADMIN_GROUPS) }}
+{{- fail "Set at least one of config.ROLE_VIEWER_GROUPS, ROLE_EDITOR_GROUPS or ROLE_ADMIN_GROUPS to the directory groups that may use JSON Store. Without one, nobody could sign in." }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

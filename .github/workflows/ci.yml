@@ -20,7 +20,7 @@ jobs:
       - uses: azure/setup-helm@v4
       # The chart refuses to render without an image tag and credentials, so lint supplies stand-ins.
       - run: >-
-          helm lint chart --set image.tag=ci
+          helm lint chart --set image.tag=ci --set config.ROLE_EDITOR_GROUPS=ci
           --set secrets.DB_USER=ci --set secrets.DB_PASSWORD=ci
           --set secrets.LDAP_MANAGER_DN=ci --set secrets.LDAP_MANAGER_PASSWORD=ci
           --set secrets.JWT_SECRET=ci-only-secret-that-is-long-enough-to-sign

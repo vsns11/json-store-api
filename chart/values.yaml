@@ -29,6 +29,16 @@ config:
   LDAP_BASE: dc=example,dc=com
   LDAP_USER_DN_PATTERNS: uid={0},ou=people
   LDAP_GROUP_SEARCH_BASE: ou=groups
+  LDAP_CONNECT_TIMEOUT_MS: "5000"
+  LDAP_READ_TIMEOUT_MS: "10000"
+  # Directory groups (their cn, comma-separated) that may use JSON Store. At least one is required:
+  # the chart refuses to render without, and anyone in none of them is refused at sign-in.
+  ROLE_VIEWER_GROUPS: ""
+  ROLE_EDITOR_GROUPS: ""
+  ROLE_ADMIN_GROUPS: ""
+  # Wrong passwords per username, per replica, before sign-in pauses for that name.
+  LOGIN_MAX_FAILURES: "5"
+  LOGIN_FAILURE_WINDOW: PT5M
 
 # Which template catalogue the form offers. Leave both empty for the one built into the image,
 # templates/catalog.json.
@@ -83,17 +93,32 @@ route:
   enabled: false
   host: ""
   path: /api
+  annotations: {}
   tls:
     termination: edge
+  # A second Route for the sign-in endpoint alone, so the router can limit how often one client
+  # address may try it. The API's own pause counts per username, per replica; this counts per client.
+  signInRateLimit:
+    enabled: true
+    annotations:
+      haproxy.router.openshift.io/rate-limit-connections: "true"
+      haproxy.router.openshift.io/rate-limit-connections.rate-http: "10"
 
 ingress:
   enabled: false
   className: nginx
   host: ""
   path: /api
+  annotations: {}
   tls:
     enabled: true
     secretName: json-store-tls
+  # A second Ingress for the sign-in endpoint alone, limited per client address by ingress-nginx.
+  # Other controllers ignore these annotations; set your own under signInRateLimit.annotations.
+  signInRateLimit:
+    enabled: true
+    requestsPerMinute: 10
+    annotations: {}
 
 nodeSelector: {}
 tolerations: []

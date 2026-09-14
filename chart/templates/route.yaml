@@ -4,11 +4,38 @@ kind: Route
 metadata:
   name: {{ include "json-store-api.fullname" . }}
   labels: {{- include "json-store-api.labels" . | nindent 4 }}
+  {{- with .Values.route.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   {{- with .Values.route.host }}
   host: {{ . }}
   {{- end }}
   path: {{ .Values.route.path }}
+  to:
+    kind: Service
+    name: {{ include "json-store-api.fullname" . }}
+  port:
+    targetPort: http
+  tls:
+    termination: {{ .Values.route.tls.termination }}
+    insecureEdgeTerminationPolicy: Redirect
+{{- end }}
+{{- if and .Values.route.enabled .Values.route.signInRateLimit.enabled }}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "json-store-api.fullname" . }}-sign-in
+  labels: {{- include "json-store-api.labels" . | nindent 4 }}
+  {{- with .Values.route.signInRateLimit.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.route.host }}
+  host: {{ . }}
+  {{- end }}
+  path: {{ .Values.route.path }}/auth/login
   to:
     kind: Service
     name: {{ include "json-store-api.fullname" . }}

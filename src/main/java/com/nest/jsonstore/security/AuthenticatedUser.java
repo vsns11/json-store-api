@@ -6,9 +6,10 @@ import org.springframework.security.core.GrantedAuthority;
 import java.util.List;
 
 /**
- * Who the caller is, in the terms the API talks about: a username and the groups they belong to.
+ * Who the caller is, in the terms the API talks about: the directory's username for them, and the
+ * roles — VIEWER, EDITOR, ADMIN — their directory groups gave them at sign-in.
  *
- * Spring Security prefixes group authorities with {@code ROLE_}; that prefix is an internal
+ * Spring Security prefixes role authorities with {@code ROLE_}; that prefix is an internal
  * convention, so it is stripped in this one place rather than in every response.
  */
 public record AuthenticatedUser(String username, List<String> roles) {

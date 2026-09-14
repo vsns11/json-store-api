@@ -8,6 +8,10 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
+import com.nest.jsonstore.error.SignInNotPermittedException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -19,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Sign-in. Credentials are exchanged once for a bearer token, which every later request carries in
@@ -30,25 +35,51 @@ import java.time.Instant;
 @Tag(name = "Authentication")
 class AuthController {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+
     private final AuthenticationManager authenticationManager;
     private final TokenIssuer tokenIssuer;
+    private final DirectoryRoles directoryRoles;
+    private final SignInAttempts attempts;
 
-    AuthController(AuthenticationManager authenticationManager, TokenIssuer tokenIssuer) {
+    AuthController(AuthenticationManager authenticationManager, TokenIssuer tokenIssuer,
+                   DirectoryRoles directoryRoles, SignInAttempts attempts) {
         this.authenticationManager = authenticationManager;
         this.tokenIssuer = tokenIssuer;
+        this.directoryRoles = directoryRoles;
+        this.attempts = attempts;
     }
 
     @Operation(summary = "Exchange directory credentials for a bearer token")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Signed in"),
             @ApiResponse(responseCode = "400", description = "Username or password missing"),
-            @ApiResponse(responseCode = "401", description = "Wrong username or password")
+            @ApiResponse(responseCode = "401", description = "Wrong username or password"),
+            @ApiResponse(responseCode = "403", description = "The account is in no group that may use JSON Store"),
+            @ApiResponse(responseCode = "429", description = "Too many wrong passwords for this username; see Retry-After"),
+            @ApiResponse(responseCode = "503", description = "The directory cannot be reached")
     })
     @PostMapping("/login")
     ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.username(), request.password()));
-        return tokenResponse(tokenIssuer.issue(authentication));
+        attempts.checkAllowed(request.username());
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.username(), request.password()));
+        } catch (BadCredentialsException wrong) {
+            // Only a wrong password counts. A directory that cannot be reached is not the caller's doing.
+            attempts.failed(request.username());
+            throw wrong;
+        }
+        attempts.succeeded(request.username());
+
+        // Binding proves who someone is, not that they may be here: fail closed on no mapped group.
+        List<String> roles = directoryRoles.rolesFor(authentication);
+        if (roles.isEmpty()) {
+            log.info("Sign-in refused for {}: in no group mapped to a role", authentication.getName());
+            throw new SignInNotPermittedException();
+        }
+        return tokenResponse(tokenIssuer.issue(new AuthenticatedUser(authentication.getName(), roles)));
     }
 
     /**

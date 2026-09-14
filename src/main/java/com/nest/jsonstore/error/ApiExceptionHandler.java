@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -90,6 +92,33 @@ class ApiExceptionHandler {
         log.info("Sign-in refused: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiError.of(401, "Authentication failed", "Wrong username or password"));
+    }
+
+    /** Too many wrong passwords for one name; Retry-After says when the next attempt is counted. */
+    @ExceptionHandler(TooManySignInAttemptsException.class)
+    ResponseEntity<ApiError> handleTooManySignIns(TooManySignInAttemptsException e) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(e.retryAfterSeconds()))
+                .body(ApiError.of(429, "Too many attempts", e.getMessage()));
+    }
+
+    /** The right password, but for an account in no group that may use JSON Store. */
+    @ExceptionHandler(SignInNotPermittedException.class)
+    ResponseEntity<ApiError> handleSignInNotPermitted(SignInNotPermittedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiError.of(403, "No access", e.getMessage()));
+    }
+
+    /**
+     * The directory could not be asked at all. Answering "wrong password" would send people to reset
+     * a password that is fine, so this says what is actually wrong.
+     */
+    @ExceptionHandler(InternalAuthenticationServiceException.class)
+    ResponseEntity<ApiError> handleDirectoryUnavailable(InternalAuthenticationServiceException e) {
+        log.error("Sign-in could not reach the directory", e);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiError.of(503, "Directory unavailable",
+                        "Sign-in is unavailable because the directory cannot be reached — try again shortly"));
     }
 
     @ExceptionHandler(SessionExpiredException.class)

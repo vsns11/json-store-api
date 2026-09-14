@@ -36,7 +36,12 @@ public class TokenIssuer {
 
     /** A token for a sign-in that just happened: the session starts now. */
     public IssuedToken issue(Authentication authentication) {
-        return issue(AuthenticatedUser.of(authentication), Instant.now());
+        return issue(AuthenticatedUser.of(authentication));
+    }
+
+    /** A token for someone just signed in, carrying the roles they were given. */
+    public IssuedToken issue(AuthenticatedUser user) {
+        return issue(user, Instant.now());
     }
 
     /**

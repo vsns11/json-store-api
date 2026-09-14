@@ -1,5 +1,6 @@
 # Test directory for the in-process LDAP server used outside production.
-# alice belongs to admins and developers; bob only to developers, so bob cannot delete documents.
+# alice is in admins and developers, bob in developers, dave in auditors, and carol in no group at all.
+# The local profile maps admins, developers and auditors to ADMIN, EDITOR and VIEWER, so carol is refused.
 dn: dc=example,dc=com
 objectclass: top
 objectclass: domain
@@ -32,6 +33,28 @@ uid: bob
 mail: bob@example.com
 userPassword: secret
 
+dn: uid=carol,ou=people,dc=example,dc=com
+objectclass: top
+objectclass: person
+objectclass: organizationalPerson
+objectclass: inetOrgPerson
+cn: Carol Okafor
+sn: Okafor
+uid: carol
+mail: carol@example.com
+userPassword: secret
+
+dn: uid=dave,ou=people,dc=example,dc=com
+objectclass: top
+objectclass: person
+objectclass: organizationalPerson
+objectclass: inetOrgPerson
+cn: Dave Lindqvist
+sn: Lindqvist
+uid: dave
+mail: dave@example.com
+userPassword: secret
+
 dn: ou=groups,dc=example,dc=com
 objectclass: top
 objectclass: organizationalUnit
@@ -49,3 +72,9 @@ objectclass: top
 objectclass: groupOfNames
 cn: admins
 member: uid=alice,ou=people,dc=example,dc=com
+
+dn: cn=auditors,ou=groups,dc=example,dc=com
+objectclass: top
+objectclass: groupOfNames
+cn: auditors
+member: uid=dave,ou=people,dc=example,dc=com
