@@ -18,10 +18,10 @@ import java.util.Map;
  * They are composed from the template catalogue rather than written out here, so they always match
  * what the form would produce and each one feeds several systems.
  *
- * Never runs under the {@code prod} profile, and never touches a database that already has data.
+ * Runs only under the {@code local} profile, and never touches a database that already has data.
  */
 @Configuration
-@org.springframework.context.annotation.Profile("!prod")
+@org.springframework.context.annotation.Profile("local")
 @ConditionalOnProperty(name = "app.seed-examples", havingValue = "true", matchIfMissing = true)
 class ExampleDataSeeder {
 

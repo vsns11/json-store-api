@@ -147,17 +147,17 @@ Both are reachable without a token — they describe the API and expose no data.
 | `MAX_PAYLOAD_BYTES` `MAX_PAGE_SIZE` | `1048576` `100` | Largest inputs per profile (minified), largest page |
 | `MAX_REQUEST_BYTES` | `8388608` | Largest request body at all; refused on its length before it is read |
 | `TOMCAT_MAX_THREADS` `TOMCAT_MAX_CONNECTIONS` | `200` `10000` | |
-| `SPRING_PROFILES_ACTIVE` | — | Set to `prod` in production |
-| `LDAP_URL` | embedded server | Required under `prod` |
+| `SPRING_PROFILES_ACTIVE` | unset, which runs `local` | `local` alone gets the test directory, the development secret and example data. Name any profile, usually `prod`, and all three are off |
+| `LDAP_URL` | embedded server under `local` | Required under any other profile |
 | `LDAP_BASE` | `dc=example,dc=com` | Root the DNs below are relative to |
 | `LDAP_MANAGER_DN` `LDAP_MANAGER_PASSWORD` | empty | Account used for group lookups |
 | `LDAP_USER_DN_PATTERNS` | `uid={0},ou=people` | Leave empty to search instead |
 | `LDAP_USER_SEARCH_BASE` `LDAP_USER_SEARCH_FILTER` | empty, `(uid={0})` | Used when no DN pattern is set |
 | `LDAP_GROUP_SEARCH_BASE` `LDAP_GROUP_SEARCH_FILTER` | `ou=groups`, `(member={0})` | Membership becomes a role |
-| `JWT_SECRET` | dev default | Required under `prod`; at least 32 characters |
+| `JWT_SECRET` | development secret under `local` | Required under any other profile; at least 32 characters. The development secret is refused outside `local`, even if set on purpose |
 | `JWT_TTL` | `PT8H` | How long one token lasts; the browser renews it before it runs out |
 | `JWT_MAX_SESSION` | `PT24H` | How long a sign-in can be kept alive by renewing, counted from the bind |
-| `SEED_EXAMPLES` | `true` | Example profiles for an empty DB; ignored under `prod` |
+| `SEED_EXAMPLES` | `true` | Example profiles for an empty DB; `local` only |
 
 ## API
 
@@ -263,6 +263,13 @@ kubectl create secret generic json-store-credentials -n json-store \
   --from-literal=JWT_SECRET="$(openssl rand -base64 48)"
 ```
 
+The chart refuses to render a release that would start in a bad state rather than letting pods
+crash-loop afterwards: `image.tag` is required, so a node never quietly keeps running an old image
+under a moving tag; the five credentials are required unless `existingSecret` names a Secret you
+manage; and a release whose connection pools could outgrow the database is refused, because
+`DB_POOL_MAX` × (the most replicas + one surge pod) must fit inside `database.maxConnections` less
+`database.reservedConnections`. Changing a chart-managed secret rolls the pods.
+
 Everything else lives in `chart/values.yaml`, which is commented; the settings that usually change are
 `image.repository`, the entries under `config` (database host, LDAP URL and DN patterns, CORS origin)
 and whether you want a `route` (OpenShift) or an `ingress` (Kubernetes).
@@ -338,7 +345,7 @@ What matters as the store or the traffic grows:
 - **The index costs writes and disk.** About 33 MB per 100k profiles, and every insert or update
   maintains it. This store is read-heavy, so that is the right trade; if it ever is not, drop
   `idx_profile_search` and searches go back to scanning.
-- **Connections, not CPU, are the first ceiling.** Total connections = replicas × `DB_POOL_MAX`. Keep
+- **Connections, not CPU, are the first ceiling.** The chart checks this for you and refuses a release that could exceed it. Total connections = replicas × `DB_POOL_MAX`. Keep
   that under PostgreSQL's `max_connections`, or put PgBouncer in front in transaction pooling mode.
 - **Reads dominate.** Every list and search is a read-only transaction and can go to read replicas.
 - **Offset paging holds up further than expected** — page 5,000 costs 19 ms. It grows linearly with the

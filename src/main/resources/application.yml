@@ -1,6 +1,10 @@
 spring:
   application:
     name: json-store
+  profiles:
+    # With no profile chosen, this is a developer's own machine; see the local document at the end.
+    # Choosing any profile at all — prod, staging, anything — turns every development fallback off.
+    default: local
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:jsonstore}
@@ -110,12 +114,14 @@ springdoc:
     path: /v3/api-docs
 
 app:
-  # Example documents are inserted into an empty database outside the prod profile.
+  # Example profiles are inserted into an empty database under the local profile only.
   seed-examples: ${SEED_EXAMPLES:true}
   security:
     jwt:
-      # Must be at least 32 characters. Production supplies its own (see application-prod.yml).
-      secret: ${JWT_SECRET:development-only-secret-not-for-production-use}
+      # Must be at least 32 characters. There is deliberately no default here: only the local profile
+      # below has one, so a deployment that forgets JWT_SECRET fails to start instead of signing
+      # tokens with a secret published in this repository.
+      secret: ${JWT_SECRET}
       # How long one token lasts. The browser renews it before it runs out, but only for as long
       # as max-session allows, counted from the moment the password was typed.
       ttl: ${JWT_TTL:PT8H}
@@ -149,14 +155,24 @@ logging:
     console: '%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%X{requestId:-        }] %-40.40logger{39} : %m%n'
 
 ---
-# Outside production, an in-process LDAP server starts with the test directory in
-# src/main/resources/ldap/users.ldif — sign in as alice/secret or bob/secret.
+# A developer's own machine. This runs when no profile is chosen, so `./mvnw spring-boot:run` needs
+# nothing set up. Naming any profile leaves it off — which is the point: this used to apply to every
+# profile except `prod`, so a deployment started as `staging` signed tokens with the development
+# secret and let alice/secret in as an administrator.
+#
+# An in-process LDAP server starts with the test directory in src/main/resources/ldap/users.ldif;
+# sign in as alice/secret or bob/secret.
 spring:
   config:
     activate:
-      on-profile: '!prod'
+      on-profile: local
   ldap:
     embedded:
       base-dn: dc=example,dc=com
       ldif: classpath:ldap/users.ldif
       port: ${LDAP_EMBEDDED_PORT:8389}
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:development-only-secret-not-for-production-use}

@@ -1,3 +1,9 @@
+{{- $replicas := .Values.autoscaling.enabled | ternary .Values.autoscaling.maxReplicas .Values.replicaCount | int }}
+{{- $pool := .Values.config.DB_POOL_MAX | int }}
+{{- $budget := sub (.Values.database.maxConnections | int) (.Values.database.reservedConnections | int) }}
+{{- if gt (mul $pool (add1 $replicas)) $budget }}
+{{- fail (printf "DB_POOL_MAX %d x %d pods (%d replicas + 1 surge) = %d connections, over the %d this database allows (database.maxConnections - database.reservedConnections). Lower the pool or the replicas, or put PgBouncer in front." $pool (add1 $replicas) $replicas (mul $pool (add1 $replicas)) $budget) }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,6 +27,9 @@ spec:
         # Restart the pods when the settings change, not only when the image does.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/catalog: {{ .Values.catalog | toYaml | sha256sum }}
+        {{- if not .Values.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "8081"
         prometheus.io/path: /actuator/prometheus
@@ -30,7 +39,7 @@ spec:
       {{- end }}
       containers:
         - name: api
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}:{{ required "image.tag is required: pin the exact image this release runs" .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

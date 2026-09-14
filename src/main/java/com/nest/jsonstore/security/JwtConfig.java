@@ -3,6 +3,8 @@ package com.nest.jsonstore.security;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -19,10 +21,25 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 class JwtConfig {
 
+    /** The secret application.yml falls back to under the local profile, and nowhere else. */
+    static final String DEVELOPMENT_SECRET = "development-only-secret-not-for-production-use";
+
     private final SecretKeySpec key;
 
-    JwtConfig(SecurityProperties properties) {
-        byte[] secret = properties.jwt().secret().getBytes(StandardCharsets.UTF_8);
+    JwtConfig(SecurityProperties properties, Environment environment) {
+        String configured = properties.jwt().secret();
+        if (configured == null || configured.isBlank()) {
+            throw new IllegalStateException("app.security.jwt.secret is required: set JWT_SECRET");
+        }
+        // The development secret is in this repository, so anyone who has read it can sign a token for
+        // any account with any role. It is refused everywhere except a developer's own machine — even
+        // when set on purpose — so a staging deployment with a mistyped profile cannot run on it.
+        if (DEVELOPMENT_SECRET.equals(configured) && !environment.acceptsProfiles(Profiles.of("local"))) {
+            throw new IllegalStateException("app.security.jwt.secret is the development secret, which is published "
+                    + "in this repository. Set JWT_SECRET to one of your own; the development secret is only "
+                    + "accepted under the local profile.");
+        }
+        byte[] secret = configured.getBytes(StandardCharsets.UTF_8);
         if (secret.length < 32) {
             throw new IllegalStateException("app.security.jwt.secret must be at least 32 characters");
         }

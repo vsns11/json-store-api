@@ -5,7 +5,7 @@ replicaCount: 3
 
 image:
   repository: ghcr.io/your-org/json-store-api
-  tag: ""              # defaults to the chart's appVersion
+  tag: ""              # required: the exact image this release runs, never a moving tag
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -19,7 +19,7 @@ config:
   DB_HOST: postgresql
   DB_PORT: "5432"
   DB_NAME: jsonstore
-  DB_POOL_MAX: "16"
+  DB_POOL_MAX: "8"
   MAX_PAYLOAD_BYTES: "1048576"
   MAX_REQUEST_BYTES: "8388608"
   JWT_TTL: PT8H
@@ -63,8 +63,16 @@ resources:
 autoscaling:
   enabled: true
   minReplicas: 3
-  maxReplicas: 30
+  maxReplicas: 6
   targetCPUUtilizationPercentage: 65
+
+# What the database can give this service. A release whose connection pools could exceed it at full
+# scale is refused at render time, because otherwise the autoscaler adds pods exactly when load
+# peaks and each new one fails readiness for want of a connection.
+# The check is DB_POOL_MAX x (the most replicas + 1 surge pod) <= maxConnections - reservedConnections.
+database:
+  maxConnections: 100
+  reservedConnections: 20
 
 podDisruptionBudget:
   enabled: true
