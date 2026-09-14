@@ -29,3 +29,19 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "json-store-api.secretName" -}}
 {{- .Values.existingSecret | default (include "json-store-api.fullname" .) -}}
 {{- end -}}
+
+{{/*
+Where the API reads its template catalogue from, or nothing for the one built into the image.
+*/}}
+{{- define "json-store-api.catalogLocation" -}}
+{{- if and .Values.catalog.existingConfigMap .Values.catalog.builtin -}}
+{{- fail "catalog: set builtin or existingConfigMap, not both" -}}
+{{- else if .Values.catalog.existingConfigMap -}}
+file:/etc/json-store/catalog/{{ .Values.catalog.key }}
+{{- else if .Values.catalog.builtin -}}
+{{- if not (has .Values.catalog.builtin (list "tmf702")) -}}
+{{- fail (printf "catalog.builtin %q is not in the image; the built-in catalogues are: tmf702" .Values.catalog.builtin) -}}
+{{- end -}}
+classpath:templates/{{ .Values.catalog.builtin }}-catalog.json
+{{- end -}}
+{{- end -}}

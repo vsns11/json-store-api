@@ -20,6 +20,7 @@ spec:
       annotations:
         # Restart the pods when the settings change, not only when the image does.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/catalog: {{ .Values.catalog | toYaml | sha256sum }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "8081"
         prometheus.io/path: /actuator/prometheus
@@ -36,6 +37,11 @@ spec:
               containerPort: 8080
             - name: management
               containerPort: 8081
+          {{- with (include "json-store-api.catalogLocation" .) }}
+          env:
+            - name: APP_TEMPLATES_CATALOG
+              value: {{ . | quote }}
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "json-store-api.fullname" . }}
@@ -72,10 +78,20 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.catalog.existingConfigMap }}
+            - name: catalog
+              mountPath: /etc/json-store/catalog
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 256Mi
+        {{- if .Values.catalog.existingConfigMap }}
+        - name: catalog
+          configMap:
+            name: {{ .Values.catalog.existingConfigMap }}
+        {{- end }}
       terminationGracePeriodSeconds: 40
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}

@@ -1,0 +1,1044 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "id": "resource-inventory",
+      "label": "Resource",
+      "description": "One TMF702 Resource, ready to insert into the inventory"
+    }
+  ],
+  "groups": [
+    {
+      "id": "resource",
+      "label": "Resource type",
+      "required": true,
+      "help": "What is being recorded"
+    },
+    {
+      "id": "site",
+      "label": "Site"
+    },
+    {
+      "id": "owner",
+      "label": "Related party"
+    },
+    {
+      "id": "lifecycle",
+      "label": "Lifecycle state"
+    }
+  ],
+  "fragments": [
+    {
+      "id": "onu",
+      "group": "resource",
+      "name": "ONU \u2014 customer premises",
+      "description": "An optical network unit at a subscriber address",
+      "fields": [
+        {
+          "key": "resourceName",
+          "label": "Resource name",
+          "type": "text",
+          "default": "ONU-0001",
+          "required": true
+        },
+        {
+          "key": "specId",
+          "label": "Specification id",
+          "type": "select",
+          "options": [
+            "spec-onu-g-010",
+            "spec-onu-xgs-020"
+          ],
+          "default": "spec-onu-g-010"
+        },
+        {
+          "key": "resourceVersion",
+          "label": "Resource version",
+          "type": "text",
+          "default": "1.0"
+        },
+        {
+          "key": "serialNumber",
+          "label": "Serial number",
+          "type": "text",
+          "default": "ALCL0A1B2C3D",
+          "required": true
+        },
+        {
+          "key": "macAddress",
+          "label": "MAC address",
+          "type": "text",
+          "default": "00:1A:2B:3C:4D:5E"
+        },
+        {
+          "key": "portCount",
+          "label": "Ethernet ports",
+          "type": "number",
+          "default": 4,
+          "min": 1,
+          "max": 8
+        },
+        {
+          "key": "dhcpEnabled",
+          "label": "DHCP enabled",
+          "type": "switch",
+          "default": true
+        },
+        {
+          "key": "parentPortId",
+          "label": "Served by OLT port",
+          "type": "text",
+          "default": "OLT-TOR-01-1-1-1",
+          "help": "The access port this unit hangs off; becomes a resourceRelationship"
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "@type": "PhysicalResource",
+          "@baseType": "Resource",
+          "name": "${resourceName}",
+          "description": "Optical network unit ${resourceName}",
+          "category": "CPE",
+          "resourceVersion": "${resourceVersion}",
+          "resourceSpecification": {
+            "id": "${specId}",
+            "href": "/resourceCatalogManagement/v4/resourceSpecification/${specId}",
+            "@type": "ResourceSpecificationRef"
+          },
+          "resourceCharacteristic": [
+            {
+              "name": "serialNumber",
+              "valueType": "string",
+              "value": "${serialNumber}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "macAddress",
+              "valueType": "string",
+              "value": "${macAddress}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "ethernetPorts",
+              "valueType": "integer",
+              "value": "${portCount}",
+              "@type": "IntegerCharacteristic"
+            },
+            {
+              "name": "dhcpEnabled",
+              "valueType": "boolean",
+              "value": "${dhcpEnabled}",
+              "@type": "BooleanCharacteristic"
+            }
+          ],
+          "resourceRelationship": [
+            {
+              "relationshipType": "dependsOn",
+              "resource": {
+                "id": "${parentPortId}",
+                "href": "/resourceInventoryManagement/v4/resource/${parentPortId}",
+                "@referredType": "PhysicalResource"
+              },
+              "@type": "ResourceRelationship"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "olt-chassis",
+      "group": "resource",
+      "name": "OLT chassis",
+      "description": "An optical line terminal in an exchange",
+      "fields": [
+        {
+          "key": "resourceName",
+          "label": "Resource name",
+          "type": "text",
+          "default": "OLT-TOR-01",
+          "required": true
+        },
+        {
+          "key": "specId",
+          "label": "Specification id",
+          "type": "select",
+          "options": [
+            "spec-olt-7360",
+            "spec-olt-7302"
+          ],
+          "default": "spec-olt-7360"
+        },
+        {
+          "key": "resourceVersion",
+          "label": "Resource version",
+          "type": "text",
+          "default": "1.0"
+        },
+        {
+          "key": "vendor",
+          "label": "Vendor",
+          "type": "select",
+          "options": [
+            "Nokia",
+            "Huawei",
+            "Calix",
+            "Adtran"
+          ],
+          "default": "Nokia"
+        },
+        {
+          "key": "assetTag",
+          "label": "Asset tag",
+          "type": "text",
+          "default": "AST-100234"
+        },
+        {
+          "key": "rack",
+          "label": "Rack",
+          "type": "text",
+          "default": "R12"
+        },
+        {
+          "key": "shelfCount",
+          "label": "Shelves",
+          "type": "number",
+          "default": 2,
+          "min": 1,
+          "max": 8
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "@type": "PhysicalResource",
+          "@baseType": "Resource",
+          "name": "${resourceName}",
+          "description": "${vendor} optical line terminal ${resourceName}",
+          "category": "Equipment",
+          "resourceVersion": "${resourceVersion}",
+          "resourceSpecification": {
+            "id": "${specId}",
+            "href": "/resourceCatalogManagement/v4/resourceSpecification/${specId}",
+            "@type": "ResourceSpecificationRef"
+          },
+          "resourceCharacteristic": [
+            {
+              "name": "vendor",
+              "valueType": "string",
+              "value": "${vendor}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "assetTag",
+              "valueType": "string",
+              "value": "${assetTag}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "rack",
+              "valueType": "string",
+              "value": "${rack}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "shelfCount",
+              "valueType": "integer",
+              "value": "${shelfCount}",
+              "@type": "IntegerCharacteristic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "olt-port",
+      "group": "resource",
+      "name": "OLT port",
+      "description": "A single access port on an optical line terminal",
+      "fields": [
+        {
+          "key": "resourceName",
+          "label": "Resource name",
+          "type": "text",
+          "default": "OLT-TOR-01-1-1-1",
+          "required": true
+        },
+        {
+          "key": "specId",
+          "label": "Specification id",
+          "type": "select",
+          "options": [
+            "spec-olt-port-10g",
+            "spec-olt-port-100g"
+          ],
+          "default": "spec-olt-port-10g"
+        },
+        {
+          "key": "resourceVersion",
+          "label": "Resource version",
+          "type": "text",
+          "default": "1.0"
+        },
+        {
+          "key": "bandwidthMbps",
+          "label": "Bandwidth (Mbps)",
+          "type": "number",
+          "default": 10000
+        },
+        {
+          "key": "splitRatio",
+          "label": "Split ratio",
+          "type": "select",
+          "options": [
+            "1:16",
+            "1:32",
+            "1:64",
+            "1:128"
+          ],
+          "default": "1:32"
+        },
+        {
+          "key": "chassisId",
+          "label": "Part of chassis",
+          "type": "text",
+          "default": "OLT-TOR-01"
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "@type": "PhysicalResource",
+          "@baseType": "Resource",
+          "name": "${resourceName}",
+          "category": "AccessPort",
+          "resourceVersion": "${resourceVersion}",
+          "resourceSpecification": {
+            "id": "${specId}",
+            "href": "/resourceCatalogManagement/v4/resourceSpecification/${specId}",
+            "@type": "ResourceSpecificationRef"
+          },
+          "resourceCharacteristic": [
+            {
+              "name": "bandwidthMbps",
+              "valueType": "integer",
+              "value": "${bandwidthMbps}",
+              "@type": "IntegerCharacteristic"
+            },
+            {
+              "name": "splitRatio",
+              "valueType": "string",
+              "value": "${splitRatio}",
+              "@type": "StringCharacteristic"
+            }
+          ],
+          "resourceRelationship": [
+            {
+              "relationshipType": "isPartOf",
+              "resource": {
+                "id": "${chassisId}",
+                "href": "/resourceInventoryManagement/v4/resource/${chassisId}",
+                "@referredType": "PhysicalResource"
+              },
+              "@type": "ResourceRelationship"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "splitter",
+      "group": "resource",
+      "name": "Optical splitter",
+      "description": "A passive splitter in the distribution network",
+      "fields": [
+        {
+          "key": "resourceName",
+          "label": "Resource name",
+          "type": "text",
+          "default": "SPL-TOR-0042",
+          "required": true
+        },
+        {
+          "key": "specId",
+          "label": "Specification id",
+          "type": "text",
+          "default": "spec-splitter-passive"
+        },
+        {
+          "key": "resourceVersion",
+          "label": "Resource version",
+          "type": "text",
+          "default": "1.0"
+        },
+        {
+          "key": "splitRatio",
+          "label": "Split ratio",
+          "type": "select",
+          "options": [
+            "1:8",
+            "1:16",
+            "1:32",
+            "1:64"
+          ],
+          "default": "1:16"
+        },
+        {
+          "key": "insertionLossDb",
+          "label": "Insertion loss (dB)",
+          "type": "number",
+          "default": 13,
+          "min": 1,
+          "max": 30
+        },
+        {
+          "key": "enclosure",
+          "label": "Enclosure",
+          "type": "text",
+          "default": "FDH-TOR-118"
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "@type": "PhysicalResource",
+          "@baseType": "Resource",
+          "name": "${resourceName}",
+          "category": "PassiveDistribution",
+          "resourceVersion": "${resourceVersion}",
+          "resourceSpecification": {
+            "id": "${specId}",
+            "href": "/resourceCatalogManagement/v4/resourceSpecification/${specId}",
+            "@type": "ResourceSpecificationRef"
+          },
+          "resourceCharacteristic": [
+            {
+              "name": "splitRatio",
+              "valueType": "string",
+              "value": "${splitRatio}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "insertionLossDb",
+              "valueType": "integer",
+              "value": "${insertionLossDb}",
+              "@type": "IntegerCharacteristic"
+            },
+            {
+              "name": "enclosure",
+              "valueType": "string",
+              "value": "${enclosure}",
+              "@type": "StringCharacteristic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "service-vlan",
+      "group": "resource",
+      "name": "Service VLAN",
+      "description": "A logical VLAN carrying one service class",
+      "fields": [
+        {
+          "key": "resourceName",
+          "label": "Resource name",
+          "type": "text",
+          "default": "VLAN-BROADBAND-101",
+          "required": true
+        },
+        {
+          "key": "specId",
+          "label": "Specification id",
+          "type": "text",
+          "default": "spec-vlan-service"
+        },
+        {
+          "key": "resourceVersion",
+          "label": "Resource version",
+          "type": "text",
+          "default": "1.0"
+        },
+        {
+          "key": "vlanId",
+          "label": "VLAN id",
+          "type": "number",
+          "default": 101,
+          "min": 1,
+          "max": 4094
+        },
+        {
+          "key": "serviceClass",
+          "label": "Service class",
+          "type": "radio",
+          "options": [
+            "broadband",
+            "voice",
+            "iptv",
+            "management"
+          ],
+          "default": "broadband"
+        },
+        {
+          "key": "multicast",
+          "label": "Multicast enabled",
+          "type": "switch",
+          "default": false
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "@type": "LogicalResource",
+          "@baseType": "Resource",
+          "name": "${resourceName}",
+          "category": "VLAN",
+          "resourceVersion": "${resourceVersion}",
+          "resourceSpecification": {
+            "id": "${specId}",
+            "href": "/resourceCatalogManagement/v4/resourceSpecification/${specId}",
+            "@type": "ResourceSpecificationRef"
+          },
+          "resourceCharacteristic": [
+            {
+              "name": "vlanId",
+              "valueType": "integer",
+              "value": "${vlanId}",
+              "@type": "IntegerCharacteristic"
+            },
+            {
+              "name": "serviceClass",
+              "valueType": "string",
+              "value": "${serviceClass}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "multicastEnabled",
+              "valueType": "boolean",
+              "value": "${multicast}",
+              "@type": "BooleanCharacteristic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ip-subnet",
+      "group": "resource",
+      "name": "IP subnet",
+      "description": "An address range assigned to an access network",
+      "fields": [
+        {
+          "key": "resourceName",
+          "label": "Resource name",
+          "type": "text",
+          "default": "SUBNET-10-24-16-0",
+          "required": true
+        },
+        {
+          "key": "specId",
+          "label": "Specification id",
+          "type": "text",
+          "default": "spec-ip-subnet"
+        },
+        {
+          "key": "resourceVersion",
+          "label": "Resource version",
+          "type": "text",
+          "default": "1.0"
+        },
+        {
+          "key": "cidr",
+          "label": "CIDR",
+          "type": "text",
+          "default": "10.24.16.0/22",
+          "required": true
+        },
+        {
+          "key": "gateway",
+          "label": "Gateway",
+          "type": "text",
+          "default": "10.24.16.1"
+        },
+        {
+          "key": "addressFamily",
+          "label": "Address family",
+          "type": "radio",
+          "options": [
+            "IPv4",
+            "IPv6"
+          ],
+          "default": "IPv4"
+        },
+        {
+          "key": "dnsServers",
+          "label": "DNS servers",
+          "type": "tags",
+          "default": [
+            "10.24.0.10",
+            "10.24.0.11"
+          ]
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "@type": "LogicalResource",
+          "@baseType": "Resource",
+          "name": "${resourceName}",
+          "category": "IPSubnet",
+          "resourceVersion": "${resourceVersion}",
+          "resourceSpecification": {
+            "id": "${specId}",
+            "href": "/resourceCatalogManagement/v4/resourceSpecification/${specId}",
+            "@type": "ResourceSpecificationRef"
+          },
+          "resourceCharacteristic": [
+            {
+              "name": "cidr",
+              "valueType": "string",
+              "value": "${cidr}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "gateway",
+              "valueType": "string",
+              "value": "${gateway}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "addressFamily",
+              "valueType": "string",
+              "value": "${addressFamily}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "dnsServers",
+              "valueType": "array",
+              "value": "${dnsServers}",
+              "@type": "ArrayCharacteristic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "site-toronto",
+      "group": "site",
+      "name": "Toronto central",
+      "fields": [
+        {
+          "key": "siteId",
+          "label": "Site id",
+          "type": "text",
+          "default": "SITE-TOR-01"
+        },
+        {
+          "key": "streetAddress",
+          "label": "Street address",
+          "type": "text",
+          "default": "150 Front St W"
+        },
+        {
+          "key": "postcode",
+          "label": "Postcode",
+          "type": "text",
+          "default": "M5J 1E3"
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "place": [
+            {
+              "id": "${siteId}",
+              "href": "/geographicAddressManagement/v4/geographicAddress/${siteId}",
+              "name": "${streetAddress}, Toronto ON ${postcode}",
+              "role": "installationAddress",
+              "@referredType": "GeographicAddress"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "site-montreal",
+      "group": "site",
+      "name": "Montreal east",
+      "fields": [
+        {
+          "key": "siteId",
+          "label": "Site id",
+          "type": "text",
+          "default": "SITE-MTL-04"
+        },
+        {
+          "key": "streetAddress",
+          "label": "Street address",
+          "type": "text",
+          "default": "1 Place Ville Marie"
+        },
+        {
+          "key": "postcode",
+          "label": "Postcode",
+          "type": "text",
+          "default": "H3B 2C1"
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "place": [
+            {
+              "id": "${siteId}",
+              "href": "/geographicAddressManagement/v4/geographicAddress/${siteId}",
+              "name": "${streetAddress}, Montreal QC ${postcode}",
+              "role": "installationAddress",
+              "@referredType": "GeographicAddress"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "site-subscriber",
+      "group": "site",
+      "name": "Subscriber address",
+      "description": "A residential or business address rather than one of our own sites",
+      "fields": [
+        {
+          "key": "siteId",
+          "label": "Address id",
+          "type": "text",
+          "default": "ADDR-0000000",
+          "required": true
+        },
+        {
+          "key": "streetAddress",
+          "label": "Street address",
+          "type": "text",
+          "default": "42 Maple Ave",
+          "required": true
+        },
+        {
+          "key": "unit",
+          "label": "Unit",
+          "type": "text",
+          "default": "Unit 1",
+          "required": true
+        },
+        {
+          "key": "postcode",
+          "label": "Postcode",
+          "type": "text",
+          "default": "L4C 1A1"
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "place": [
+            {
+              "id": "${siteId}",
+              "href": "/geographicAddressManagement/v4/geographicAddress/${siteId}",
+              "name": "${streetAddress} ${unit} ${postcode}",
+              "role": "serviceAddress",
+              "@referredType": "GeographicAddress"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "party-residential",
+      "group": "owner",
+      "name": "Residential subscriber",
+      "fields": [
+        {
+          "key": "partyId",
+          "label": "Customer id",
+          "type": "text",
+          "default": "CUST-4471002",
+          "required": true
+        },
+        {
+          "key": "partyName",
+          "label": "Customer name",
+          "type": "text",
+          "default": "A. Subscriber"
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "relatedParty": [
+            {
+              "id": "${partyId}",
+              "href": "/partyManagement/v4/individual/${partyId}",
+              "name": "${partyName}",
+              "role": "customer",
+              "@referredType": "Individual"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "party-business",
+      "group": "owner",
+      "name": "Business account",
+      "fields": [
+        {
+          "key": "partyId",
+          "label": "Account id",
+          "type": "text",
+          "default": "ORG-88120",
+          "required": true
+        },
+        {
+          "key": "partyName",
+          "label": "Organisation",
+          "type": "text",
+          "default": "Acme Logistics Inc."
+        },
+        {
+          "key": "accountManager",
+          "label": "Account manager",
+          "type": "text",
+          "default": "EMP-20114",
+          "required": true,
+          "help": "Always written: a fragment has no conditionals, so a blank here would store an empty relatedParty id"
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "relatedParty": [
+            {
+              "id": "${partyId}",
+              "href": "/partyManagement/v4/organization/${partyId}",
+              "name": "${partyName}",
+              "role": "customer",
+              "@referredType": "Organization"
+            },
+            {
+              "id": "${accountManager}",
+              "role": "accountManager",
+              "@referredType": "Individual"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "party-network-ops",
+      "group": "owner",
+      "name": "Network operations",
+      "description": "Internally owned, with no customer attached",
+      "fields": [
+        {
+          "key": "partyId",
+          "label": "Team id",
+          "type": "text",
+          "default": "ORG-NETOPS"
+        },
+        {
+          "key": "partyName",
+          "label": "Team",
+          "type": "text",
+          "default": "Network Operations"
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "relatedParty": [
+            {
+              "id": "${partyId}",
+              "name": "${partyName}",
+              "role": "owner",
+              "@referredType": "Organization"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lifecycle-in-service",
+      "group": "lifecycle",
+      "name": "In service",
+      "fields": [
+        {
+          "key": "startOperatingDate",
+          "label": "Start operating date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "noteText",
+          "label": "Note",
+          "type": "textarea",
+          "default": "Activated by provisioning run.",
+          "rows": 2
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "resourceStatus": "available",
+          "administrativeState": "unlocked",
+          "operationalState": "enable",
+          "usageState": "active",
+          "startOperatingDate": "${startOperatingDate}",
+          "note": [
+            {
+              "text": "${noteText}",
+              "@type": "Note"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lifecycle-planned",
+      "group": "lifecycle",
+      "name": "Planned",
+      "fields": [
+        {
+          "key": "startOperatingDate",
+          "label": "Planned in-service date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "noteText",
+          "label": "Note",
+          "type": "textarea",
+          "default": "Ordered, awaiting build.",
+          "rows": 2
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "resourceStatus": "planned",
+          "administrativeState": "locked",
+          "operationalState": "disable",
+          "usageState": "idle",
+          "startOperatingDate": "${startOperatingDate}",
+          "note": [
+            {
+              "text": "${noteText}",
+              "@type": "Note"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lifecycle-reserved",
+      "group": "lifecycle",
+      "name": "Reserved",
+      "description": "Held for a known order but not yet carrying traffic",
+      "fields": [
+        {
+          "key": "reservedFor",
+          "label": "Reserved for order",
+          "type": "text",
+          "default": "ORD-556012"
+        },
+        {
+          "key": "reservationExpiry",
+          "label": "Reservation expires",
+          "type": "date",
+          "required": true
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "resourceStatus": "reserved",
+          "administrativeState": "locked",
+          "operationalState": "disable",
+          "usageState": "busy",
+          "resourceCharacteristic": [
+            {
+              "name": "reservedForOrder",
+              "valueType": "string",
+              "value": "${reservedFor}",
+              "@type": "StringCharacteristic"
+            },
+            {
+              "name": "reservationExpiry",
+              "valueType": "string",
+              "value": "${reservationExpiry}",
+              "@type": "StringCharacteristic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lifecycle-maintenance",
+      "group": "lifecycle",
+      "name": "In maintenance",
+      "fields": [
+        {
+          "key": "changeRef",
+          "label": "Change reference",
+          "type": "text",
+          "default": "CHG-2026-0918"
+        },
+        {
+          "key": "noteText",
+          "label": "Note",
+          "type": "textarea",
+          "default": "Firmware upgrade window.",
+          "rows": 2
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "resourceStatus": "suspended",
+          "administrativeState": "locked",
+          "operationalState": "disable",
+          "usageState": "idle",
+          "resourceCharacteristic": [
+            {
+              "name": "changeReference",
+              "valueType": "string",
+              "value": "${changeRef}",
+              "@type": "StringCharacteristic"
+            }
+          ],
+          "note": [
+            {
+              "text": "${noteText}",
+              "@type": "Note"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lifecycle-decommissioned",
+      "group": "lifecycle",
+      "name": "Decommissioned",
+      "fields": [
+        {
+          "key": "endOperatingDate",
+          "label": "End operating date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "noteText",
+          "label": "Note",
+          "type": "textarea",
+          "default": "Removed from service, awaiting recovery.",
+          "rows": 2
+        }
+      ],
+      "documents": {
+        "resource-inventory": {
+          "resourceStatus": "unknown",
+          "administrativeState": "locked",
+          "operationalState": "disable",
+          "usageState": "idle",
+          "endOperatingDate": "${endOperatingDate}",
+          "note": [
+            {
+              "text": "${noteText}",
+              "@type": "Note"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

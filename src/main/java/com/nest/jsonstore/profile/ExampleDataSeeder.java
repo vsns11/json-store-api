@@ -72,18 +72,29 @@ class ExampleDataSeeder {
                 return;
             }
 
-            List<Profile> profiles = EXAMPLES.stream().map(example -> {
-                TemplateComposer.Composition composed = composer.compose(example.selection(), example.values());
+            List<Profile> profiles = new java.util.ArrayList<>();
+            for (Example example : EXAMPLES) {
+                TemplateComposer.Composition composed;
+                try {
+                    composed = composer.compose(example.selection(), example.values());
+                } catch (IllegalArgumentException mismatch) {
+                    // These examples are written against the scenario catalogue. Pointed at another one
+                    // (the TMF702 catalogue, say), they would compose into nothing, so they are skipped
+                    // rather than stored empty.
+                    log.info("Skipping example '{}': {}", example.name(), mismatch.getMessage());
+                    continue;
+                }
 
                 ObjectNode template = json.createObjectNode();
                 template.set("selection", json.valueToTree(example.selection()));
                 template.set("values", composed.values());
 
-                // The seeder is not a person, and saying it was one would put a name in the audit
-                // trail that never signed in. These rows show no author, like any that predate it.
-                return new Profile(example.name(), example.description(), example.tags(),
-                        composed.documents(), mapper.sizeOf(composed.documents()), template, null);
-            }).toList();
+                profiles.add(new Profile(example.name(), example.description(), example.tags(),
+                        composed.documents(), mapper.sizeOf(composed.documents()), template, null));
+            }
+            if (profiles.isEmpty()) {
+                return;
+            }
 
             repository.saveAll(profiles);
             log.info("Seeded {} example profiles, composed from the template catalogue", profiles.size());

@@ -199,6 +199,30 @@ Errors always come back in one shape, and JSON syntax errors carry the position 
 }
 ```
 
+### A TMF702 example to start from
+
+`src/main/resources/templates/tmf702-catalog.json` is a second catalogue modelling a TMF702
+Resource inventory: six resource types (ONU, OLT chassis, OLT port, optical splitter, service VLAN,
+IP subnet), three sites, three related-party kinds and five lifecycle states. Point the service at
+it instead of the default and the form builds Resources rather than test scenarios.
+
+```bash
+APP_TEMPLATES_CATALOG=classpath:templates/tmf702-catalog.json ./mvnw spring-boot:run
+```
+
+Any path a `Resource` can read works, so a workspace keeps its own catalogue outside the image:
+`file:/etc/json-store/catalog.json`, or a mounted ConfigMap.
+
+Two things that catalogue is written to demonstrate. A placeholder standing alone keeps the value's
+own type, so `"value": "${portCount}"` stores `8` and not `"8"` — which is what keeps an
+`IntegerCharacteristic` honest. And fragments merge: the resource type, the site, the party and the
+lifecycle state each contribute part of one Resource, with objects merged key by key and arrays
+appended, so `resourceCharacteristic` ends up carrying entries from two fragments at once.
+
+The limit worth knowing before writing your own: **a fragment has no conditionals and always writes
+its whole body**. A field left blank still emits its block, which is how you get a `relatedParty`
+with an empty `id`. Anything genuinely optional belongs in its own group, so it can be left unset.
+
 Every profile records who wrote it. `createdBy` and `updatedBy` are directory usernames taken from
 the verified token, never from the request body, so a client cannot claim to be another account; a
 `updatedBy` sent in the body is ignored. Both are null on profiles stored before the columns existed

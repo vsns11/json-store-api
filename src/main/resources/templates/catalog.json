@@ -605,6 +605,20 @@
       "description": "The warehouse holds the items",
       "fields": [
         {
+          "key": "sku",
+          "label": "Item SKU",
+          "type": "text",
+          "default": "NEST-01"
+        },
+        {
+          "key": "quantity",
+          "label": "Quantity",
+          "type": "number",
+          "default": 1,
+          "min": 1,
+          "max": 99
+        },
+        {
           "key": "warehouse",
           "label": "Warehouse",
           "type": "select",
@@ -667,6 +681,20 @@
       "name": "Backordered",
       "description": "Nothing in stock, the order waits",
       "fields": [
+        {
+          "key": "sku",
+          "label": "Item SKU",
+          "type": "text",
+          "default": "NEST-01"
+        },
+        {
+          "key": "quantity",
+          "label": "Quantity",
+          "type": "number",
+          "default": 1,
+          "min": 1,
+          "max": 99
+        },
         {
           "key": "warehouse",
           "label": "Warehouse",

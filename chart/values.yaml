@@ -30,6 +30,19 @@ config:
   LDAP_USER_DN_PATTERNS: uid={0},ou=people
   LDAP_GROUP_SEARCH_BASE: ou=groups
 
+# Which template catalogue the form offers. Leave both empty for the one built into the image,
+# templates/catalog.json.
+catalog:
+  # A catalogue shipped inside the image, by name: "tmf702" serves templates/tmf702-catalog.json.
+  builtin: ""
+  # Or your own: an existing ConfigMap holding the catalogue, and the key it is stored under. It is
+  # mounted read-only and checked at startup, so a malformed catalogue fails the rollout, not a user.
+  existingConfigMap: ""
+  key: catalog.json
+  # The chart cannot see inside a ConfigMap it does not own, so editing one does not restart the
+  # pods by itself. Change this to any new value when you do, and they roll.
+  revision: ""
+
 # Credentials. In a real cluster set `existingSecret` and leave these empty, so
 # nothing sensitive is ever written into a values file.
 existingSecret: ""
