@@ -175,16 +175,51 @@ things readable without a token are the OpenAPI description and its viewer.
 | `GET` | `/api/profiles` | `search`, `tag`, `page`, `size`, `sort`, `direction`; returns summaries |
 | `GET` | `/api/profiles/stats` | Profile count, total input bytes, last change |
 | `GET` | `/api/profiles/{id}` | One profile including its inputs, and who wrote it |
-| `POST` | `/api/profiles` | Create · `201` with the stored profile |
-| `PUT` | `/api/profiles/{id}` | Replace name, description, tags and inputs |
+| `POST` | `/api/profiles` | Create from templates · `201` with the stored profile, inputs built by the server |
+| `PUT` | `/api/profiles/{id}` | Replace name, description and tags; with `template`, rebuild the inputs too |
 | `DELETE` | `/api/profiles/{id}` | `204` — requires the admins group |
+| `POST` | `/api/admin/profiles/recompose` | Rebuild stored inputs from their own templates; a dry run unless `apply=true` — admins only |
+
+A write carries what was chosen and typed, never the inputs themselves. The server checks the
+selection and every value against the catalogue, composes the documents, and stores its own result,
+so nothing reaches the database that the form could not have built. Values left out take the
+catalogue's defaults, and the stored `template` records them all:
 
 ```bash
-curl -s localhost:8080/api/profiles -H "Authorization: Bearer $TOKEN" \
+curl -s localhost:8090/api/profiles -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Checkout — gift card","tags":["checkout"],
-       "payload":{"orders-api":{"basket":{"lines":[{"sku":"NEST-01"}]}},
-                  "payments":{"payment":{"method":"gift-card"}}}}'
+  -d '{"name":"Checkout — declined card","tags":["checkout"],
+       "template":{"selection":{"scenario":"checkout","payment":"card-declined"},
+                   "values":{"orderRef":"ORD-777","quantity":2}}}'
+```
+
+Inputs the catalogue would not build are refused with `422`, listing every problem at once and
+naming where each one is, so a form can mark them all:
+
+```json
+{
+  "status": 422,
+  "error": "Invalid inputs",
+  "message": "Choose a template for Scenario",
+  "fieldErrors": [
+    { "field": "template.selection.scenario", "message": "Choose a template for Scenario" },
+    { "field": "template.values.quantity", "message": "Quantity must be at most 99" }
+  ]
+}
+```
+
+The database holds the same line: a check refuses any stored inputs that are not an object of named
+documents, or that still contain a placeholder. Migration `V8` adds it `NOT VALID`, so a database
+that already holds a bad row still starts. Repair such rows, then extend the check to them:
+
+```bash
+curl -s -X POST localhost:8090/api/admin/profiles/recompose -H "Authorization: Bearer $TOKEN"              # report
+curl -s -X POST 'localhost:8090/api/admin/profiles/recompose?apply=true' -H "Authorization: Bearer $TOKEN" # repair
+```
+
+```sql
+alter table profile validate constraint profile_payload_is_named_documents;
+alter table profile validate constraint profile_payload_has_no_placeholder;
 ```
 
 Errors always come back in one shape, and JSON syntax errors carry the position that broke:

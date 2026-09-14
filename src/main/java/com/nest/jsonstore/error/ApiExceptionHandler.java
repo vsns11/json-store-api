@@ -105,14 +105,15 @@ class ApiExceptionHandler {
                 .body(ApiError.of(403, "Forbidden", "Your account is not allowed to do this"));
     }
 
-    @ExceptionHandler(InvalidDocumentsException.class)
-    ResponseEntity<ApiError> handleInvalidDocuments(InvalidDocumentsException e) {
-        return ResponseEntity.badRequest().body(ApiError.of(400, "Invalid inputs", e.getMessage()));
-    }
-
-    @ExceptionHandler(InvalidTemplateException.class)
-    ResponseEntity<ApiError> handleInvalidTemplate(InvalidTemplateException e) {
-        return ResponseEntity.badRequest().body(ApiError.of(400, "Invalid template", e.getMessage()));
+    /**
+     * Inputs the catalogue would not have produced: a template it does not offer, a required group
+     * left unset, a value of the wrong kind. 422 rather than 400, because the request itself was
+     * well-formed; every problem is listed with the field it is about, so the form can mark them all.
+     */
+    @ExceptionHandler(InvalidInputsException.class)
+    ResponseEntity<ApiError> handleInvalidInputs(InvalidInputsException e) {
+        return ResponseEntity.unprocessableEntity()
+                .body(ApiError.of(422, "Invalid inputs", e.getMessage()).withFieldErrors(e.issues()));
     }
 
     @ExceptionHandler(PayloadTooLargeException.class)

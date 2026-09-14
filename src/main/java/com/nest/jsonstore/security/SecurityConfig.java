@@ -68,6 +68,8 @@ class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         // Deleting a profile is reserved for the admin group in the directory.
                         .requestMatchers(HttpMethod.DELETE, "/api/profiles/**").hasRole("ADMINS")
+                        // Maintenance that rewrites stored profiles in bulk.
+                        .requestMatchers("/api/admin/**").hasRole("ADMINS")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))

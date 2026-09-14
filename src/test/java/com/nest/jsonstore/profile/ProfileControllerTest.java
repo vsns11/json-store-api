@@ -52,7 +52,7 @@ class ProfileControllerTest {
 
         mockMvc.perform(post("/api/profiles")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"Config\",\"tags\":[\"infra\"],\"payload\":{\"a\":1}}"))
+                        .content("{\"name\":\"Config\",\"tags\":[\"infra\"],\"template\":{\"selection\":{\"scenario\":\"checkout\"}}}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(id.toString()))
                 .andExpect(jsonPath("$.payload.a").value(1));
@@ -62,7 +62,7 @@ class ProfileControllerTest {
     void rejectsProfileWithoutName() throws Exception {
         mockMvc.perform(post("/api/profiles")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"payload\":{\"a\":1}}"))
+                        .content("{\"tags\":[]}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Validation failed"))
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("name"));
@@ -72,7 +72,7 @@ class ProfileControllerTest {
     void reportsWhereMalformedJsonBreaks() throws Exception {
         mockMvc.perform(post("/api/profiles")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"Broken\",\"payload\":{\"a\":}}"))
+                        .content("{\"name\":\"Broken\",\"template\":{\"selection\":}}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Invalid JSON"))
                 .andExpect(jsonPath("$.location.line").value(1));

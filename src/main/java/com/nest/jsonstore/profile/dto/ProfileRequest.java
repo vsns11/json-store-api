@@ -1,13 +1,17 @@
 package com.nest.jsonstore.profile.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-/** What the client sends when creating or updating a profile. */
+/**
+ * What the client sends when creating or updating a profile.
+ *
+ * There is deliberately no field for the inputs. They are composed by the server from the template,
+ * so a client cannot store JSON the catalogue would not have produced — and a body that still sends
+ * {@code payload} has it ignored.
+ */
 public record ProfileRequest(
 
         @NotBlank(message = "The profile needs a name")
@@ -19,10 +23,10 @@ public record ProfileRequest(
 
         List<@Size(max = 40, message = "A tag must be at most 40 characters") String> tags,
 
-        @NotNull(message = "The profile needs its inputs")
-        JsonNode payload,
-
-        /** Optional: the template selection and field values these inputs were composed from. */
-        JsonNode template
+        /**
+         * The templates chosen and the values typed. Required to create a profile. On update, leaving it
+         * out changes only the name, description and tags, and keeps the inputs exactly as they are.
+         */
+        TemplateRequest template
 ) {
 }

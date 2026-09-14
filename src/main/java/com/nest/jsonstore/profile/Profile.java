@@ -95,6 +95,17 @@ public class Profile {
         this.template = template;
     }
 
+    /**
+     * Renames, redescribes or retags the profile without touching its inputs, which only a template can
+     * rebuild. Records who made the change, as a full update does.
+     */
+    public void applyDetails(String name, String description, List<String> tags, String actor) {
+        this.updatedBy = actor;
+        this.name = name;
+        this.description = description;
+        this.tags = tags == null ? List.of() : List.copyOf(tags);
+    }
+
     public UUID getId() {
         return id;
     }

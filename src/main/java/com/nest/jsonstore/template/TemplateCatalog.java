@@ -163,7 +163,7 @@ public class TemplateCatalog {
         return keys;
     }
 
-    private static void collectPlaceholders(JsonNode node, Set<String> into) {
+    static void collectPlaceholders(JsonNode node, Set<String> into) {
         if (node.isTextual()) {
             Matcher matcher = PLACEHOLDER.matcher(node.asText());
             while (matcher.find()) {

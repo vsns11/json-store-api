@@ -1,8 +1,10 @@
 package com.nest.jsonstore.profile;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.nest.jsonstore.template.TemplateComposer;
+import com.nest.jsonstore.error.InvalidInputsException;
+import com.nest.jsonstore.profile.dto.ProfileRequest;
+import com.nest.jsonstore.profile.dto.TemplateRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
@@ -10,13 +12,16 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Puts a few example profiles in an empty database so a fresh environment has something to show.
- * They are composed from the template catalogue rather than written out here, so they always match
- * what the form would produce and each one feeds several systems.
+ *
+ * They are saved through the same service a user's save goes through, so the server composes and
+ * checks them against the catalogue. The seeder used to write straight to the repository, which is
+ * how one example came to store the literal text "${sku}" without anything noticing.
  *
  * Runs only under the {@code local} profile, and never touches a database that already has data.
  */
@@ -27,7 +32,7 @@ class ExampleDataSeeder {
 
     private static final Logger log = LoggerFactory.getLogger(ExampleDataSeeder.class);
 
-    /** name, description, tags, which fragment per group, and the values that differ from the defaults. */
+    /** name, description, tags, which template per group, and the values that differ from the defaults. */
     private record Example(String name, String description, List<String> tags,
                            Map<String, String> selection, Map<String, Object> values) {
     }
@@ -65,39 +70,29 @@ class ExampleDataSeeder {
                     Map.of("scenarioName", "Renewal — backordered item", "planCode", "TEAM-YEARLY")));
 
     @Bean
-    ApplicationRunner seedExamples(ProfileRepository repository, ProfileMapper mapper,
-                                   TemplateComposer composer, ObjectMapper json) {
+    ApplicationRunner seedExamples(ProfileRepository repository, ProfileService profiles, ObjectMapper json) {
         return args -> {
             if (repository.count() > 0) {
                 return;
             }
 
-            List<Profile> profiles = new java.util.ArrayList<>();
+            int seeded = 0;
             for (Example example : EXAMPLES) {
-                TemplateComposer.Composition composed;
+                Map<String, JsonNode> values = new LinkedHashMap<>();
+                example.values().forEach((key, value) -> values.put(key, json.valueToTree(value)));
                 try {
-                    composed = composer.compose(example.selection(), example.values());
-                } catch (IllegalArgumentException mismatch) {
-                    // These examples are written against the scenario catalogue. Pointed at another one
-                    // (the TMF702 catalogue, say), they would compose into nothing, so they are skipped
-                    // rather than stored empty.
+                    profiles.create(new ProfileRequest(example.name(), example.description(), example.tags(),
+                            new TemplateRequest(example.selection(), values)));
+                    seeded++;
+                } catch (InvalidInputsException mismatch) {
+                    // Written against the scenario catalogue. Pointed at another one — the TMF702
+                    // catalogue, say — they do not fit, and are skipped rather than stored half-built.
                     log.info("Skipping example '{}': {}", example.name(), mismatch.getMessage());
-                    continue;
                 }
-
-                ObjectNode template = json.createObjectNode();
-                template.set("selection", json.valueToTree(example.selection()));
-                template.set("values", composed.values());
-
-                profiles.add(new Profile(example.name(), example.description(), example.tags(),
-                        composed.documents(), mapper.sizeOf(composed.documents()), template, null));
             }
-            if (profiles.isEmpty()) {
-                return;
+            if (seeded > 0) {
+                log.info("Seeded {} example profiles through the same checks a user's save goes through", seeded);
             }
-
-            repository.saveAll(profiles);
-            log.info("Seeded {} example profiles, composed from the template catalogue", profiles.size());
         };
     }
 }

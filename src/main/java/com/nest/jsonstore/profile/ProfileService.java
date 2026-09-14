@@ -2,8 +2,7 @@ package com.nest.jsonstore.profile;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.nest.jsonstore.config.LimitsProperties;
-import com.nest.jsonstore.error.InvalidDocumentsException;
-import com.nest.jsonstore.error.InvalidTemplateException;
+import com.nest.jsonstore.error.InvalidInputsException;
 import com.nest.jsonstore.error.PayloadTooLargeException;
 import com.nest.jsonstore.error.ProfileNotFoundException;
 import com.nest.jsonstore.profile.dto.PageResponse;
@@ -11,6 +10,10 @@ import com.nest.jsonstore.profile.dto.ProfileRequest;
 import com.nest.jsonstore.profile.dto.ProfileResponse;
 import com.nest.jsonstore.profile.dto.ProfileStats;
 import com.nest.jsonstore.profile.dto.ProfileSummary;
+import com.nest.jsonstore.profile.dto.RecomposeOutcome;
+import com.nest.jsonstore.profile.dto.TemplateRequest;
+import com.nest.jsonstore.template.TemplateInputs;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -20,6 +23,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,11 +46,13 @@ public class ProfileService {
     private final ProfileRepository repository;
     private final ProfileMapper mapper;
     private final LimitsProperties limits;
+    private final TemplateInputs inputs;
 
-    ProfileService(ProfileRepository repository, ProfileMapper mapper, LimitsProperties limits) {
+    ProfileService(ProfileRepository repository, ProfileMapper mapper, LimitsProperties limits, TemplateInputs inputs) {
         this.repository = repository;
         this.mapper = mapper;
         this.limits = limits;
+        this.inputs = inputs;
     }
 
     public PageResponse<ProfileSummary> list(String search, String tag, int page, int size, String sort, String direction) {
@@ -62,13 +69,17 @@ public class ProfileService {
 
     @Transactional
     public ProfileResponse create(ProfileRequest request) {
+        if (request.template() == null) {
+            throw new InvalidInputsException("template", "A profile is built from templates: choose at least the required ones");
+        }
+        TemplateInputs.Built built = build(request.template());
         Profile profile = new Profile(
                 request.name().trim(),
                 trimToNull(request.description()),
                 normalizeTags(request.tags()),
-                request.payload(),
-                checkedSize(request),
-                checkedTemplate(request.template()),
+                built.documents(),
+                checkedSize(built),
+                built.template(),
                 actor());
         // Flush so the generated id, timestamps and version are in the entity before it is mapped.
         return mapper.toResponse(repository.saveAndFlush(profile));
@@ -77,14 +88,22 @@ public class ProfileService {
     @Transactional
     public ProfileResponse update(UUID id, ProfileRequest request) {
         Profile profile = repository.findById(id).orElseThrow(() -> new ProfileNotFoundException(id));
-        profile.apply(
-                request.name().trim(),
-                trimToNull(request.description()),
-                normalizeTags(request.tags()),
-                request.payload(),
-                checkedSize(request),
-                checkedTemplate(request.template()),
-                actor());
+        if (request.template() == null) {
+            // Renaming or retagging a profile is not a reason to rebuild its inputs, and a profile stored
+            // before templates were recorded has nothing to rebuild them from.
+            profile.applyDetails(request.name().trim(), trimToNull(request.description()),
+                    normalizeTags(request.tags()), actor());
+        } else {
+            TemplateInputs.Built built = build(request.template());
+            profile.apply(
+                    request.name().trim(),
+                    trimToNull(request.description()),
+                    normalizeTags(request.tags()),
+                    built.documents(),
+                    checkedSize(built),
+                    built.template(),
+                    actor());
+        }
         // Flush so the timestamps and version are in the entity before it is mapped.
         return mapper.toResponse(repository.saveAndFlush(profile));
     }
@@ -103,51 +122,68 @@ public class ProfileService {
     }
 
     /**
-     * Checks the inputs and returns their stored size. The inputs are a set of named documents —
-     * one per system the scenario feeds — so an object with at least one entry is the only shape
-     * that makes sense.
+     * Rebuilds every templated profile from its stored selection and values, against the catalogue as
+     * it is now. Profiles stored before the server composed inputs itself may differ from what their
+     * own template builds today — one seeded profile stored the literal text "${sku}" — and so may
+     * profiles after a catalogue is corrected.
+     *
+     * @param apply false for a dry run that only reports; true to write the rebuilt inputs
      */
-    private int checkedSize(ProfileRequest request) {
-        JsonNode payload = request.payload();
-        if (!payload.isObject() || payload.isEmpty()) {
-            throw new InvalidDocumentsException("The inputs must name at least one document, for example {\"main\": {...}}");
-        }
-        payload.fieldNames().forEachRemaining(name -> {
-            if (name.isBlank()) {
-                throw new InvalidDocumentsException("Every document needs a name");
+    @Transactional
+    public List<RecomposeOutcome> recomposeAll(boolean apply) {
+        List<RecomposeOutcome> outcomes = new ArrayList<>();
+        int page = 0;
+        Page<Profile> batch;
+        do {
+            batch = repository.findAll(PageRequest.of(page++, 200, Sort.by("id")));
+            for (Profile profile : batch) {
+                outcomes.add(recompose(profile, apply));
             }
-        });
-
-        int size = mapper.sizeOf(payload);
-        if (size > limits.maxPayloadBytes()) {
-            throw new PayloadTooLargeException(size, limits.maxPayloadBytes());
-        }
-        return size;
+        } while (batch.hasNext());
+        return outcomes;
     }
 
-    /**
-     * A template, when one is sent, is the selection a profile was composed from plus the values that
-     * were typed: {@code {"selection": {group: fragmentId}, "values": {key: value}}}. Anything else is
-     * refused — it would be stored as-is, handed back to the form, and break it. It is bound by the
-     * same size limit as the inputs, since it is stored next to them.
-     */
-    private JsonNode checkedTemplate(JsonNode template) {
-        if (template == null || template.isNull()) {
-            return null;
+    private RecomposeOutcome recompose(Profile profile, boolean apply) {
+        JsonNode template = profile.getTemplate();
+        if (template == null || !template.path("selection").isObject()) {
+            return new RecomposeOutcome(profile.getId(), profile.getName(), "not-templated",
+                    "Not built from templates, so there is nothing to rebuild it from");
         }
-        if (!template.isObject() || !template.path("selection").isObject() || !template.path("values").isObject()) {
-            throw new InvalidTemplateException("The template must be an object with a 'selection' and 'values'");
+        Map<String, String> selection = new LinkedHashMap<>();
+        template.path("selection").fields().forEachRemaining(entry -> selection.put(entry.getKey(), entry.getValue().asText()));
+        Map<String, JsonNode> values = new LinkedHashMap<>();
+        template.path("values").fields().forEachRemaining(entry -> values.put(entry.getKey(), entry.getValue()));
+
+        TemplateInputs.Built built;
+        try {
+            built = inputs.build(selection, values);
+        } catch (InvalidInputsException stale) {
+            return new RecomposeOutcome(profile.getId(), profile.getName(), "invalid", stale.getMessage());
         }
-        template.path("selection").fields().forEachRemaining(entry -> {
-            if (!entry.getValue().isTextual()) {
-                throw new InvalidTemplateException("The template selection for '" + entry.getKey() + "' must be a fragment id");
-            }
-        });
-        int size = mapper.sizeOf(template);
-        if (size > limits.maxPayloadBytes()) {
-            throw new PayloadTooLargeException(size, limits.maxPayloadBytes());
+        // ObjectNode equality ignores key order, which jsonb does not keep anyway.
+        if (built.documents().equals(profile.getPayload())) {
+            return new RecomposeOutcome(profile.getId(), profile.getName(), "unchanged", null);
         }
-        return template;
+        if (!apply) {
+            return new RecomposeOutcome(profile.getId(), profile.getName(), "would-change", null);
+        }
+        profile.apply(profile.getName(), profile.getDescription(), profile.getTags(),
+                built.documents(), checkedSize(built), built.template(), actor());
+        return new RecomposeOutcome(profile.getId(), profile.getName(), "repaired", null);
+    }
+
+    private TemplateInputs.Built build(TemplateRequest template) {
+        return inputs.build(template.selection(), template.values());
+    }
+
+    /** The stored size of the inputs, refusing inputs or a template over the configured limit. */
+    private int checkedSize(TemplateInputs.Built built) {
+        int size = mapper.sizeOf(built.documents());
+        int largest = Math.max(size, mapper.sizeOf(built.template()));
+        if (largest > limits.maxPayloadBytes()) {
+            throw new PayloadTooLargeException(largest, limits.maxPayloadBytes());
+        }
+        return size;
     }
 
     private Pageable pageable(int page, int size, String sort, String direction) {
