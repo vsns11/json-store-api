@@ -4,17 +4,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nest.jsonstore.profile.dto.ProfileResponse;
-import com.nest.jsonstore.profile.dto.ProfileSummary;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 
 @Component
 class ProfileMapper {
-
-    private static final int PREVIEW_LENGTH = 180;
 
     private final ObjectMapper objectMapper;
 
@@ -38,40 +33,9 @@ class ProfileMapper {
                 profile.getUpdatedAt());
     }
 
-    ProfileSummary toSummary(Profile profile) {
-        return new ProfileSummary(
-                profile.getId(),
-                profile.getName(),
-                profile.getDescription(),
-                profile.getTags(),
-                documentNames(profile.getPayload()),
-                preview(profile.getPayload()),
-                profile.getSizeBytes(),
-                profile.getVersion(),
-                profile.getUpdatedBy(),
-                profile.getCreatedAt(),
-                profile.getUpdatedAt());
-    }
-
     /** Byte size of the inputs once minified — what PostgreSQL effectively stores. */
     int sizeOf(JsonNode payload) {
         return minify(payload).getBytes(StandardCharsets.UTF_8).length;
-    }
-
-    /**
-     * The names of the documents inside the payload, sorted. PostgreSQL does not keep the order
-     * keys were written in, so a stable order has to be chosen: alphabetical keeps the editor's
-     * tabs from moving around between loads.
-     */
-    private static List<String> documentNames(JsonNode payload) {
-        List<String> names = new ArrayList<>();
-        payload.fieldNames().forEachRemaining(names::add);
-        return names.stream().sorted().toList();
-    }
-
-    private String preview(JsonNode payload) {
-        String minified = minify(payload);
-        return minified.length() <= PREVIEW_LENGTH ? minified : minified.substring(0, PREVIEW_LENGTH) + "…";
     }
 
     private String minify(JsonNode payload) {

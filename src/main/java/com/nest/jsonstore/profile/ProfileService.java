@@ -46,12 +46,15 @@ public class ProfileService {
     static final int MAX_TAGS = 12;
 
     private final ProfileRepository repository;
+    private final ProfileListings listings;
     private final ProfileMapper mapper;
     private final LimitsProperties limits;
     private final TemplateInputs inputs;
 
-    ProfileService(ProfileRepository repository, ProfileMapper mapper, LimitsProperties limits, TemplateInputs inputs) {
+    ProfileService(ProfileRepository repository, ProfileListings listings, ProfileMapper mapper,
+                   LimitsProperties limits, TemplateInputs inputs) {
         this.repository = repository;
+        this.listings = listings;
         this.mapper = mapper;
         this.limits = limits;
         this.inputs = inputs;
@@ -59,8 +62,8 @@ public class ProfileService {
 
     public PageResponse<ProfileSummary> list(String search, String tag, int page, int size, String sort, String direction) {
         return PageResponse.of(
-                repository.search(escapeLike(trimToNull(search)), trimToNull(tag), pageable(page, size, sort, direction)),
-                mapper::toSummary);
+                listings.page(escapeLike(trimToNull(search)), trimToNull(tag), pageable(page, size, sort, direction)),
+                summary -> summary);
     }
 
     public ProfileResponse get(UUID id) {

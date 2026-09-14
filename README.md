@@ -145,7 +145,8 @@ Both are reachable without a token — they describe the API and expose no data.
 | `SERVER_PORT` `MANAGEMENT_PORT` | `8080` `8081` | Actuator listens on its own port |
 | `CORS_ORIGINS` | `http://localhost:[*],…` | Origins the browser app is served from; an entry may be a pattern |
 | `MAX_PAYLOAD_BYTES` `MAX_PAGE_SIZE` | `1048576` `100` | Largest inputs per profile (minified), largest page |
-| `MAX_REQUEST_BYTES` | `8388608` | Largest request body at all; refused on its length before it is read |
+| `MAX_REQUEST_BYTES` | `8388608` | Largest request body at all. Refused on its announced length before it is read, and counted as it is read, so a body sent in chunks stops at the limit too |
+| `FLYWAY_ENABLED` | `true` | Whether a starting pod applies migrations; the chart turns it off when its migration Job does that instead |
 | `TOMCAT_MAX_THREADS` `TOMCAT_MAX_CONNECTIONS` | `200` `10000` | |
 | `SPRING_PROFILES_ACTIVE` | unset, which runs `local` | `local` alone gets the test directory, the development secret and example data. Name any profile, usually `prod`, and all three are off |
 | `LDAP_URL` | embedded server under `local` | Required under any other profile |
@@ -320,7 +321,22 @@ crash-loop afterwards: `image.tag` is required, so a node never quietly keeps ru
 under a moving tag; the five credentials are required unless `existingSecret` names a Secret you
 manage; and a release whose connection pools could outgrow the database is refused, because
 `DB_POOL_MAX` × (the most replicas + one surge pod) must fit inside `database.maxConnections` less
-`database.reservedConnections`. Changing a chart-managed secret rolls the pods.
+`database.reservedConnections`, counting two more for the migration Job. At least one of
+`config.ROLE_VIEWER_GROUPS`, `ROLE_EDITOR_GROUPS` and `ROLE_ADMIN_GROUPS` is required too, because without
+one nobody could sign in. Changing a chart-managed secret rolls the pods.
+
+Migrations run as a Helm hook before anything else in an install or upgrade: a Job starts the release's
+own image with `--migrate-only`, which applies them and exits without starting the API, and the
+Deployment's pods then run with `FLYWAY_ENABLED=false` and only check that the schema matches. A
+migration that fails stops the release there, with the old pods still serving, instead of crash-looping
+the new ones; `kubectl logs job/<release>-json-store-api-migrate` says why. On a first install the Job
+reads the database credentials from `existingSecret`, or from a short-lived Secret of its own, because
+the chart's Secret does not exist yet when the hook runs. Set `migrations.job.enabled=false` to go back
+to every starting pod migrating.
+
+Sign-in gets a second Ingress or Route of its own for `/api/auth/login` (`ingress.signInRateLimit`,
+`route.signInRateLimit`), so the controller can limit how often one client address tries it. That is on
+top of the API's own pause after repeated wrong passwords for one username, which counts per replica.
 
 Everything else lives in `chart/values.yaml`, which is commented; the settings that usually change are
 `image.repository`, the entries under `config` (database host, LDAP URL and DN patterns, CORS origin)
@@ -405,8 +421,13 @@ What matters as the store or the traffic grows:
   `(updated_at, id)`.
 - **Graceful shutdown** drains for 25s and the pod sleeps 5s before it starts, so rolling deploys drop
   no requests.
-- **Migrations** run on startup and are serialised by Flyway's schema lock, so concurrent replicas are
-  safe. For stricter change control, run them as a release step and set `FLYWAY_ENABLED=false`.
+- **Migrations** run once per release, in the chart's migration Job, before the new pods start. Without
+  the chart they run on startup instead, serialised by Flyway's schema lock, so concurrent replicas are
+  still safe. The same runner works anywhere: `java -jar app.jar --migrate-only`.
+- **The list reads no inputs.** A page of profiles is one query for the columns the table shows, plus
+  the document names and a 180-character preview worked out in PostgreSQL, so a page costs the same
+  whether each profile's inputs are a kilobyte or a megabyte. Ties in the sort column are broken by id,
+  so paging never shows a profile twice or skips one.
 
 The browser side does not care how many profiles exist: it asks for 15 at a time and renders about 500
 DOM nodes whether the store holds 7 rows or 100,000.
@@ -419,9 +440,11 @@ DOM nodes whether the store holds 7 rows or 100,000.
 
 A controller slice covers validation, malformed-JSON reporting and unknown ids with no database. An
 integration test runs the real stack against a PostgreSQL started by Testcontainers and the in-process
-directory, checking sign-in, the roles that come from LDAP groups (bob cannot delete, alice can), the
-migrations, the `jsonb` mapping, input-inclusive search, the size limit and the template catalogue —
-so that one needs a Docker daemon.
+directory, checking sign-in and the roles that come from LDAP groups (alice is an admin, bob an editor,
+dave a viewer, and carol is refused), repeated wrong passwords, versions and If-Match, the inputs the
+server builds and refuses, the database's own checks, rebuilding stale inputs, the `jsonb` mapping,
+input-inclusive search, paging, the size limits and the template catalogue. A second test runs the
+`--migrate-only` runner against its own PostgreSQL. Both need a Docker daemon.
 
 ## Template catalogue
 

@@ -1,0 +1,89 @@
+{{- if .Values.migrations.job.enabled }}
+{{- $secretName := .Values.existingSecret | default (printf "%s-migration" (include "json-store-api.fullname" .)) }}
+{{- if not .Values.existingSecret }}
+# On a first install the chart's own Secret does not exist yet when this hook runs, so the Job gets
+# the database credentials from a short-lived Secret of its own, removed once the Job succeeds.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  labels: {{- include "json-store-api.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+type: Opaque
+stringData:
+  DB_USER: {{ required "secrets.DB_USER is required, unless existingSecret names a Secret you manage" .Values.secrets.DB_USER | quote }}
+  DB_PASSWORD: {{ required "secrets.DB_PASSWORD is required, unless existingSecret names a Secret you manage" .Values.secrets.DB_PASSWORD | quote }}
+---
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "json-store-api.fullname" . }}-migrate
+  labels: {{- include "json-store-api.labels" . | nindent 4 }}
+  annotations:
+    # Before the new pods exist, so they never start against a schema they do not match.
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrations.job.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.job.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels: {{- include "json-store-api.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ required "image.tag is required: pin the exact image this release runs" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The image's entrypoint is a shell line, so arguments cannot simply be appended to it.
+          command: ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar --migrate-only"]
+          env:
+            # Written out here rather than read from the chart's ConfigMap, which a pre-install hook
+            # runs before.
+            {{- range $key, $value := .Values.config }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: DB_POOL_MAX
+              value: "2"
+            - name: DB_POOL_MIN
+              value: "0"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: DB_PASSWORD
+          resources: {{- toYaml .Values.migrations.job.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

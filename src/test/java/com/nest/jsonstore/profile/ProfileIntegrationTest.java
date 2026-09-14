@@ -424,6 +424,31 @@ class ProfileIntegrationTest {
                         org.hamcrest.Matchers.containsString("ETag")));
     }
 
+    /** The list leaves the inputs behind, and pages through ties without repeating or skipping one. */
+    @Test
+    void listsWithoutTheInputsAndPagesThroughTiesInAStableOrder() throws Exception {
+        String alice = tokenFor("alice");
+        for (int twin = 0; twin < 3; twin++) {
+            create(alice, checkout("Twin", "ORD-TWIN-" + twin));
+        }
+
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (int page = 0; page < 3; page++) {
+            String body = mockMvc.perform(as(get("/api/profiles"), alice)
+                            .param("search", "ORD-TWIN").param("sort", "name").param("size", "1")
+                            .param("page", String.valueOf(page)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalItems").value(3))
+                    .andExpect(jsonPath("$.items[0].payload").doesNotExist())
+                    .andExpect(jsonPath("$.items[0].template").doesNotExist())
+                    .andExpect(jsonPath("$.items[0].preview", org.hamcrest.Matchers.startsWith("{")))
+                    .andExpect(jsonPath("$.items[0].documents", org.hamcrest.Matchers.hasItem("orders-api")))
+                    .andReturn().getResponse().getContentAsString();
+            seen.add(objectMapper.readTree(body).at("/items/0/id").asText());
+        }
+        assertThat(seen).hasSize(3);
+    }
+
     /** Tag filtering is exact, unlike the free-text search which would also match the inputs. */
     @Test
     void narrowsToOneTag() throws Exception {

@@ -60,6 +60,11 @@ class ApiExceptionHandler {
         // A syntax error inside a nested value arrives wrapped in a mapping exception, so the whole
         // chain is searched for one before the failure is taken to be about shape.
         for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
+            // Reading stopped because the body went over the request limit part way through.
+            if (cause instanceof RequestBodyTooLargeException tooLarge) {
+                return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                        .body(ApiError.of(413, "Payload too large", tooLarge.getMessage()));
+            }
             if (cause instanceof JsonParseException parse) {
                 ApiError error = ApiError.of(400, "Invalid JSON", parse.getOriginalMessage());
                 if (parse.getLocation() != null) {

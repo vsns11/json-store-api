@@ -1,8 +1,11 @@
 {{- $replicas := .Values.autoscaling.enabled | ternary .Values.autoscaling.maxReplicas .Values.replicaCount | int }}
 {{- $pool := .Values.config.DB_POOL_MAX | int }}
 {{- $budget := sub (.Values.database.maxConnections | int) (.Values.database.reservedConnections | int) }}
-{{- if gt (mul $pool (add1 $replicas)) $budget }}
-{{- fail (printf "DB_POOL_MAX %d x %d pods (%d replicas + 1 surge) = %d connections, over the %d this database allows (database.maxConnections - database.reservedConnections). Lower the pool or the replicas, or put PgBouncer in front." $pool (add1 $replicas) $replicas (mul $pool (add1 $replicas)) $budget) }}
+{{- /* The migration Job holds two connections of its own while the old pods are still serving. */}}
+{{- $migration := .Values.migrations.job.enabled | ternary 2 0 | int }}
+{{- $needed := add (mul $pool (add1 $replicas)) $migration }}
+{{- if gt $needed $budget }}
+{{- fail (printf "DB_POOL_MAX %d x %d pods (%d replicas + 1 surge) + %d for migrations = %d connections, over the %d this database allows (database.maxConnections - database.reservedConnections). Lower the pool or the replicas, or put PgBouncer in front." $pool (add1 $replicas) $replicas $migration $needed $budget) }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -46,11 +49,16 @@ spec:
               containerPort: 8080
             - name: management
               containerPort: 8081
-          {{- with (include "json-store-api.catalogLocation" .) }}
           env:
+            {{- with (include "json-store-api.catalogLocation" .) }}
             - name: APP_TEMPLATES_CATALOG
               value: {{ . | quote }}
-          {{- end }}
+            {{- end }}
+            {{- if .Values.migrations.job.enabled }}
+            # The migration Job has already applied them; a serving pod only validates the schema.
+            - name: FLYWAY_ENABLED
+              value: "false"
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "json-store-api.fullname" . }}

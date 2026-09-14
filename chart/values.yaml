@@ -40,6 +40,22 @@ config:
   LOGIN_MAX_FAILURES: "5"
   LOGIN_FAILURE_WINDOW: PT5M
 
+# Database migrations. With the Job on, Helm applies them before an install or upgrade rolls out,
+# using the same image run with --migrate-only, and the API pods only check the schema matches. A
+# migration that fails then stops the release instead of crash-looping new pods. With it off, each
+# starting pod migrates — Flyway locks, so that is safe, but a failure is found during the rollout.
+migrations:
+  job:
+    enabled: true
+    backoffLimit: 1
+    activeDeadlineSeconds: 600
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
 # Which template catalogue the form offers. Leave both empty for the one built into the image,
 # templates/catalog.json.
 catalog:
