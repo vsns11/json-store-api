@@ -1,0 +1,106 @@
+[
+  {
+    "name": "ONU — 42 Maple Ave, Unit 1",
+    "description": "Customer premises unit on a residential line, in service since August",
+    "tags": ["onu", "residential"],
+    "template": {
+      "selection": { "resource": "onu", "site": "site-subscriber", "owner": "party-residential", "lifecycle": "lifecycle-in-service" },
+      "values": {
+        "resourceName": "ONU-TOR-00417", "serialNumber": "ALCL9F3E2D1C", "macAddress": "00:1A:2B:3C:4D:5E",
+        "portCount": 4, "parentPortId": "OLT-TOR-01-1-1-1",
+        "siteId": "ADDR-5520931", "streetAddress": "42 Maple Ave", "unit": "Unit 1", "postcode": "L4C 1A1",
+        "partyId": "CUST-5520931", "partyName": "J. Singh",
+        "startOperatingDate": "2026-08-14"
+      }
+    }
+  },
+  {
+    "name": "OLT chassis — Toronto central",
+    "description": "The optical line terminal the Toronto subscriber ports hang off",
+    "tags": ["olt", "core"],
+    "template": {
+      "selection": { "resource": "olt-chassis", "site": "site-toronto", "owner": "party-network-ops", "lifecycle": "lifecycle-in-service" },
+      "values": {
+        "resourceName": "OLT-TOR-01", "vendor": "Nokia", "assetTag": "AST-100234", "rack": "R12", "shelfCount": 2,
+        "startOperatingDate": "2025-11-03"
+      }
+    }
+  },
+  {
+    "name": "OLT port 1/1/1 — Toronto central",
+    "description": "A 10G PON port on OLT-TOR-01, split 1:32",
+    "tags": ["olt", "port"],
+    "template": {
+      "selection": { "resource": "olt-port", "site": "site-toronto", "owner": "party-network-ops", "lifecycle": "lifecycle-in-service" },
+      "values": {
+        "resourceName": "OLT-TOR-01-1-1-1", "chassisId": "OLT-TOR-01", "bandwidthMbps": 10000, "splitRatio": "1:32",
+        "startOperatingDate": "2025-11-03"
+      }
+    }
+  },
+  {
+    "name": "Service VLAN 101 — Montreal, planned",
+    "description": "Broadband VLAN ordered for the Montreal east build",
+    "tags": ["vlan", "planned"],
+    "template": {
+      "selection": { "resource": "service-vlan", "site": "site-montreal", "owner": "party-network-ops", "lifecycle": "lifecycle-planned" },
+      "values": {
+        "resourceName": "VLAN-BROADBAND-101", "vlanId": 101, "serviceClass": "broadband", "multicast": false,
+        "startOperatingDate": "2026-10-01"
+      }
+    }
+  },
+  {
+    "name": "IP subnet 10.24.16.0/22 — reserved for Acme",
+    "description": "Addresses held for a business order until the end of the year",
+    "tags": ["ip", "reserved"],
+    "template": {
+      "selection": { "resource": "ip-subnet", "site": "site-toronto", "owner": "party-business", "lifecycle": "lifecycle-reserved" },
+      "values": {
+        "resourceName": "SUBNET-10-24-16-0", "cidr": "10.24.16.0/22", "gateway": "10.24.16.1", "addressFamily": "IPv4",
+        "dnsServers": ["10.24.0.10", "10.24.0.11"],
+        "partyId": "ORG-88120", "partyName": "Acme Logistics Inc.", "accountManager": "EMP-20114",
+        "reservedFor": "ORD-556012", "reservationExpiry": "2026-12-31"
+      }
+    }
+  },
+  {
+    "name": "Checkout — happy path",
+    "description": "Card clears, stock is reserved, both notifications go out",
+    "tags": ["checkout", "smoke"],
+    "template": {
+      "selection": { "scenario": "checkout", "customer": "returning-customer", "payment": "card-approved",
+                     "fulfilment": "stock-reserved", "notification": "email-and-sms", "expectations": "expect-success" },
+      "values": { "scenarioName": "Checkout — happy path", "orderRef": "ORD-10042" }
+    }
+  },
+  {
+    "name": "Checkout — expired card",
+    "description": "The issuer refuses the charge, so nothing ships",
+    "tags": ["checkout", "negative"],
+    "template": {
+      "selection": { "scenario": "checkout", "customer": "returning-customer", "payment": "card-declined",
+                     "notification": "email-only", "expectations": "expect-failure" },
+      "values": { "scenarioName": "Checkout — expired card", "orderRef": "ORD-10043", "declineCode": "expired_card" }
+    }
+  },
+  {
+    "name": "Bulk import — 10k rows",
+    "description": "A file pushed through the importer overnight",
+    "tags": ["import", "load"],
+    "template": {
+      "selection": { "scenario": "bulk-import", "expectations": "expect-success" },
+      "values": { "scenarioName": "Bulk import — 10k rows", "rows": 10000, "batchSize": 500 }
+    }
+  },
+  {
+    "name": "Renewal — backordered item",
+    "description": "A renewal for a plan whose item is out of stock",
+    "tags": ["subscription", "edge"],
+    "template": {
+      "selection": { "scenario": "subscription-renewal", "customer": "new-customer", "payment": "bank-transfer",
+                     "fulfilment": "backorder", "expectations": "expect-success" },
+      "values": { "scenarioName": "Renewal — backordered item", "planCode": "TEAM-YEARLY" }
+    }
+  }
+]

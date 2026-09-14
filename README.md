@@ -270,7 +270,9 @@ own type, so `"value": "${portCount}"` stores `8` and not `"8"` — which is wha
 lifecycle state each contribute part of one Resource, with objects merged key by key and arrays
 appended, so `resourceCharacteristic` ends up carrying entries from two fragments at once. Names,
 serial numbers, MAC addresses, addresses and party ids are `example`s rather than defaults, so each
-resource has to be given its own.
+resource has to be given its own. Under the `local` profile an empty database is given five example resources written for this
+catalogue — an ONU at a subscriber address, an OLT chassis and one of its ports, a planned service VLAN
+and a reserved subnet — from `src/main/resources/examples/profiles.json`.
 
 The limit worth knowing before writing your own: **a fragment has no conditionals and always writes
 its whole body**. A field left blank still emits its block, which is how you get a `relatedParty`
