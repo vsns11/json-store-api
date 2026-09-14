@@ -148,6 +148,15 @@ class TemplateCatalogTest {
     }
 
     @Test
+    void refusesAPatternThatIsNotARegularExpression() {
+        assertThatThrownBy(() -> inline(catalogue("""
+                "fields": [{"key": "serial", "type": "text", "pattern": "[A-Z"}],
+                "documents": {"main": {"serial": "${serial}"}}""")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not a valid regular expression");
+    }
+
+    @Test
     void ignoresValuesForFieldsNoChosenTemplateDeclares() {
         TemplateComposer composer = new TemplateComposer(inline(catalogue("""
                 "fields": [{"key": "a", "type": "text", "default": "x"}],

@@ -38,7 +38,7 @@
           "key": "resourceName",
           "label": "Resource name",
           "type": "text",
-          "default": "ONU-0001",
+          "example": "ONU-0001",
           "required": true
         },
         {
@@ -61,14 +61,14 @@
           "key": "serialNumber",
           "label": "Serial number",
           "type": "text",
-          "default": "ALCL0A1B2C3D",
+          "example": "ALCL0A1B2C3D",
           "required": true
         },
         {
           "key": "macAddress",
           "label": "MAC address",
           "type": "text",
-          "default": "00:1A:2B:3C:4D:5E"
+          "example": "00:1A:2B:3C:4D:5E"
         },
         {
           "key": "portCount",
@@ -88,7 +88,7 @@
           "key": "parentPortId",
           "label": "Served by OLT port",
           "type": "text",
-          "default": "OLT-TOR-01-1-1-1",
+          "example": "OLT-TOR-01-1-1-1",
           "help": "The access port this unit hangs off; becomes a resourceRelationship"
         }
       ],
@@ -155,7 +155,7 @@
           "key": "resourceName",
           "label": "Resource name",
           "type": "text",
-          "default": "OLT-TOR-01",
+          "example": "OLT-TOR-01",
           "required": true
         },
         {
@@ -190,13 +190,13 @@
           "key": "assetTag",
           "label": "Asset tag",
           "type": "text",
-          "default": "AST-100234"
+          "example": "AST-100234"
         },
         {
           "key": "rack",
           "label": "Rack",
           "type": "text",
-          "default": "R12"
+          "example": "R12"
         },
         {
           "key": "shelfCount",
@@ -259,7 +259,7 @@
           "key": "resourceName",
           "label": "Resource name",
           "type": "text",
-          "default": "OLT-TOR-01-1-1-1",
+          "example": "OLT-TOR-01-1-1-1",
           "required": true
         },
         {
@@ -300,7 +300,7 @@
           "key": "chassisId",
           "label": "Part of chassis",
           "type": "text",
-          "default": "OLT-TOR-01"
+          "example": "OLT-TOR-01"
         }
       ],
       "documents": {
@@ -353,7 +353,7 @@
           "key": "resourceName",
           "label": "Resource name",
           "type": "text",
-          "default": "SPL-TOR-0042",
+          "example": "SPL-TOR-0042",
           "required": true
         },
         {
@@ -392,7 +392,7 @@
           "key": "enclosure",
           "label": "Enclosure",
           "type": "text",
-          "default": "FDH-TOR-118"
+          "example": "FDH-TOR-118"
         }
       ],
       "documents": {
@@ -440,7 +440,7 @@
           "key": "resourceName",
           "label": "Resource name",
           "type": "text",
-          "default": "VLAN-BROADBAND-101",
+          "example": "VLAN-BROADBAND-101",
           "required": true
         },
         {
@@ -459,7 +459,7 @@
           "key": "vlanId",
           "label": "VLAN id",
           "type": "number",
-          "default": 101,
+          "example": 101,
           "min": 1,
           "max": 4094
         },
@@ -527,7 +527,7 @@
           "key": "resourceName",
           "label": "Resource name",
           "type": "text",
-          "default": "SUBNET-10-24-16-0",
+          "example": "SUBNET-10-24-16-0",
           "required": true
         },
         {
@@ -546,14 +546,14 @@
           "key": "cidr",
           "label": "CIDR",
           "type": "text",
-          "default": "10.24.16.0/22",
+          "example": "10.24.16.0/22",
           "required": true
         },
         {
           "key": "gateway",
           "label": "Gateway",
           "type": "text",
-          "default": "10.24.16.1"
+          "example": "10.24.16.1"
         },
         {
           "key": "addressFamily",
@@ -569,7 +569,7 @@
           "key": "dnsServers",
           "label": "DNS servers",
           "type": "tags",
-          "default": [
+          "example": [
             "10.24.0.10",
             "10.24.0.11"
           ]
@@ -702,28 +702,28 @@
           "key": "siteId",
           "label": "Address id",
           "type": "text",
-          "default": "ADDR-0000000",
+          "example": "ADDR-0000000",
           "required": true
         },
         {
           "key": "streetAddress",
           "label": "Street address",
           "type": "text",
-          "default": "42 Maple Ave",
+          "example": "42 Maple Ave",
           "required": true
         },
         {
           "key": "unit",
           "label": "Unit",
           "type": "text",
-          "default": "Unit 1",
+          "example": "Unit 1",
           "required": true
         },
         {
           "key": "postcode",
           "label": "Postcode",
           "type": "text",
-          "default": "L4C 1A1"
+          "example": "L4C 1A1"
         }
       ],
       "documents": {
@@ -749,14 +749,14 @@
           "key": "partyId",
           "label": "Customer id",
           "type": "text",
-          "default": "CUST-4471002",
+          "example": "CUST-4471002",
           "required": true
         },
         {
           "key": "partyName",
           "label": "Customer name",
           "type": "text",
-          "default": "A. Subscriber"
+          "example": "A. Subscriber"
         }
       ],
       "documents": {
@@ -782,20 +782,20 @@
           "key": "partyId",
           "label": "Account id",
           "type": "text",
-          "default": "ORG-88120",
+          "example": "ORG-88120",
           "required": true
         },
         {
           "key": "partyName",
           "label": "Organisation",
           "type": "text",
-          "default": "Acme Logistics Inc."
+          "example": "Acme Logistics Inc."
         },
         {
           "key": "accountManager",
           "label": "Account manager",
           "type": "text",
-          "default": "EMP-20114",
+          "example": "EMP-20114",
           "required": true,
           "help": "Always written: a fragment has no conditionals, so a blank here would store an empty relatedParty id"
         }
@@ -931,7 +931,7 @@
           "key": "reservedFor",
           "label": "Reserved for order",
           "type": "text",
-          "default": "ORD-556012"
+          "example": "ORD-556012"
         },
         {
           "key": "reservationExpiry",
@@ -972,7 +972,7 @@
           "key": "changeRef",
           "label": "Change reference",
           "type": "text",
-          "default": "CHG-2026-0918"
+          "example": "CHG-2026-0918"
         },
         {
           "key": "noteText",

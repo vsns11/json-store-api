@@ -258,7 +258,9 @@ Two things that catalogue is written to demonstrate. A placeholder standing alon
 own type, so `"value": "${portCount}"` stores `8` and not `"8"` — which is what keeps an
 `IntegerCharacteristic` honest. And fragments merge: the resource type, the site, the party and the
 lifecycle state each contribute part of one Resource, with objects merged key by key and arrays
-appended, so `resourceCharacteristic` ends up carrying entries from two fragments at once.
+appended, so `resourceCharacteristic` ends up carrying entries from two fragments at once. Names,
+serial numbers, MAC addresses, addresses and party ids are `example`s rather than defaults, so each
+resource has to be given its own.
 
 The limit worth knowing before writing your own: **a fragment has no conditionals and always writes
 its whole body**. A field left blank still emits its block, which is how you get a `relatedParty`
@@ -417,10 +419,10 @@ so that one needs a Docker daemon.
 `GET /api/templates` returns `src/main/resources/templates/catalog.json`: fragments grouped into a
 scenario and optional customer, payment, delivery and expectation modules, each naming the system it
 feeds with `target`, each with the fields
-it needs and a body containing `${field}` placeholders. The browser merges the chosen fragments —
-objects deeply, lists by appending — substitutes the values, and stores the result as one profile. A
-string that is exactly one placeholder keeps the field's type, so `"quantity": "${quantity}"` is stored
-as a number.
+it needs and a body containing `${field}` placeholders. The server merges the chosen fragments —
+objects deeply, lists by appending — substitutes the values, and stores the result as one profile; the
+browser runs the same merge only to preview it. A string that is exactly one placeholder keeps the
+field's type, so `"quantity": "${quantity}"` is stored as a number.
 
 A fragment writes into **every system it names**, so one scenario can already produce an API request,
 an event on the bus and the assertions for the run:
@@ -444,13 +446,24 @@ The catalogue that ships covers six systems: `orders-api`, `payments`, `inventor
 
 Each field declares a `type`, which decides the control the browser draws: `text`, `textarea`, `number`,
 `range`, `date`, `select`, `radio`, `switch`, `checkbox`, `checkboxes` or `tags`. Together with `label`,
-`default`, `required`, `help` and — where it applies — `options`, `min`, `max` and `step`, that is the
-whole vocabulary. The web repository's README lists what each one stores.
+`default`, `example`, `required`, `pattern`, `help` and — where it applies — `options`, `min`, `max` and
+`step`, that is the whole vocabulary. The web repository's README lists what each one stores.
+
+A `default` is stored unless someone changes it; an `example` is a hint in the empty box and is never
+stored. Anything that identifies one particular thing — a serial number, a MAC address, a customer id —
+should be an `example`, so no profile is saved carrying the sample identity of equipment that does not
+exist. A save is checked against these declarations: `required`, `min`/`max`, a real date, one of the
+`options`, and the whole value matching `pattern`.
+
+The catalogue is checked at startup too, and refuses to load with a placeholder no field declares, an
+unknown field type, a choice with no options, a field declared twice in one fragment, or a `pattern`
+that is not a valid regular expression.
 
 A composed profile keeps the selection it was built from in its `template` column — which fragment was
 chosen in each group, and what was typed into their fields — so the browser can offer the same form
-again when the profile is edited. Profiles written by hand have no template, and the field is simply
-absent from their responses.
+again when the profile is edited, and so an administrator can rebuild stored inputs after a catalogue
+fix. Profiles stored before templates were recorded have none, and the field is absent from their
+responses; they can be renamed and retagged, but their inputs can only be rebuilt by choosing templates.
 
 Editing the catalogue is a config change, not a code change; a malformed catalogue fails startup rather
 than a user's first click.

@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 /**
@@ -158,6 +159,16 @@ public class TemplateCatalog {
             if (CHOICE_TYPES.contains(type) && (!field.path("options").isArray() || field.path("options").isEmpty())) {
                 throw new IllegalStateException("Field '" + key + "' in template fragment '" + fragmentId
                         + "' is a " + type + " with no options to choose from");
+            }
+            // Checked on every save, so a broken expression would otherwise surface as a server error
+            // on some user's first attempt rather than here.
+            if (field.hasNonNull("pattern")) {
+                try {
+                    Pattern.compile(field.path("pattern").asText());
+                } catch (PatternSyntaxException invalid) {
+                    throw new IllegalStateException("Field '" + key + "' in template fragment '" + fragmentId
+                            + "' has a pattern that is not a valid regular expression: " + invalid.getDescription());
+                }
             }
         }
         return keys;
