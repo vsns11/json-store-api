@@ -293,6 +293,9 @@ where payload -> 'orders-api' @> '{"scenario": "checkout"}';
 
 ## Deploying with Helm
 
+Moving both apps into an office environment — your registry, database, directory and cluster — has
+its own step-by-step checklist in [docs/office-migration.md](docs/office-migration.md).
+
 The chart in `chart/` deploys the API to OpenShift or plain Kubernetes. Images come from your CI;
 the chart only deploys them.
 
