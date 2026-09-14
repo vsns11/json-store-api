@@ -157,6 +157,15 @@ class ProfileIntegrationTest {
                 .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.contains("DEVELOPERS")));
     }
 
+    /** The ETag a profile is currently served with, which a change must send back as If-Match. */
+    private String etagOf(String token, String id) throws Exception {
+        return mockMvc.perform(as(get("/api/profiles/{id}", id), token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getHeader(HttpHeaders.ETAG);
+    }
+
     /** A profile built from the checkout scenario alone, with the given order reference. */
     private String checkout(String name, String orderRef) throws Exception {
         return profile(name, List.of(), Map.of("scenario", "checkout"), Map.of("orderRef", orderRef));
@@ -197,7 +206,8 @@ class ProfileIntegrationTest {
 
         // Deleting belongs to the admins group: bob is only a developer.
         mockMvc.perform(as(delete("/api/profiles/{id}", id), tokenFor("bob"))).andExpect(status().isForbidden());
-        mockMvc.perform(as(delete("/api/profiles/{id}", id), alice)).andExpect(status().isNoContent());
+        mockMvc.perform(as(delete("/api/profiles/{id}", id), alice).header(HttpHeaders.IF_MATCH, etagOf(alice, id)))
+                .andExpect(status().isNoContent());
         mockMvc.perform(as(get("/api/profiles/{id}", id), alice)).andExpect(status().isNotFound());
     }
 
@@ -274,7 +284,8 @@ class ProfileIntegrationTest {
         String alice = tokenFor("alice");
         String id = create(alice, checkout("Before", "ORD-DETAILS-1"));
 
-        mockMvc.perform(as(put("/api/profiles/{id}", id), alice).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(as(put("/api/profiles/{id}", id), alice).header(HttpHeaders.IF_MATCH, etagOf(alice, id))
+                        .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"After","description":"Renamed","tags":["renamed"]}"""))
                 .andExpect(status().isOk())
@@ -282,6 +293,73 @@ class ProfileIntegrationTest {
                 .andExpect(jsonPath("$.tags[0]").value("renamed"))
                 .andExpect(jsonPath("$.payload['orders-api'].body.reference").value("ORD-DETAILS-1"))
                 .andExpect(jsonPath("$.template.selection.scenario").value("checkout"));
+    }
+
+    /**
+     * Two people editing the same profile cannot silently overwrite each other. A change names the
+     * version it was made to; one made to an out-of-date copy is refused, and says who saved since.
+     */
+    @Test
+    void refusesAChangeMadeToAnOutOfDateCopy() throws Exception {
+        String alice = tokenFor("alice");
+        String bob = tokenFor("bob");
+        String id = create(alice, checkout("Contended", "ORD-CONTENDED"));
+        String loaded = etagOf(alice, id);
+        assertThat(loaded).isEqualTo("\"0\"");
+
+        // Saying nothing about the version is not allowed: the last save would simply win.
+        mockMvc.perform(as(put("/api/profiles/{id}", id), bob).contentType(MediaType.APPLICATION_JSON)
+                        .content(checkout("Contended", "ORD-BOB")))
+                .andExpect(status().isPreconditionRequired())
+                .andExpect(jsonPath("$.status").value(428));
+
+        // alice saves the version she loaded; the new ETag comes back with the save.
+        mockMvc.perform(as(put("/api/profiles/{id}", id), alice).header(HttpHeaders.IF_MATCH, loaded)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(checkout("Contended", "ORD-ALICE")))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ETAG, "\"1\""))
+                .andExpect(jsonPath("$.version").value(1));
+
+        // bob still holds version 0, so his save and his delete are both refused, naming alice.
+        mockMvc.perform(as(put("/api/profiles/{id}", id), bob).header(HttpHeaders.IF_MATCH, loaded)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(checkout("Contended", "ORD-BOB")))
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("changed by alice")));
+        mockMvc.perform(as(delete("/api/profiles/{id}", id), alice).header(HttpHeaders.IF_MATCH, loaded))
+                .andExpect(status().isPreconditionFailed());
+        mockMvc.perform(as(get("/api/profiles/{id}", id), alice))
+                .andExpect(jsonPath("$.payload['orders-api'].body.reference").value("ORD-ALICE"));
+
+        // Overwriting is still possible, but only by asking for it.
+        mockMvc.perform(as(put("/api/profiles/{id}", id), bob).header(HttpHeaders.IF_MATCH, "*")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(checkout("Contended", "ORD-BOB")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updatedBy").value("bob"));
+
+        // The list carries the version too, so a row can be deleted without opening it; a weak tag matches.
+        mockMvc.perform(as(get("/api/profiles").param("search", "Contended"), alice))
+                .andExpect(jsonPath("$.items[0].version").value(2));
+        mockMvc.perform(as(delete("/api/profiles/{id}", id), alice).header(HttpHeaders.IF_MATCH, "W/\"2\""))
+                .andExpect(status().isNoContent());
+    }
+
+    /** A browser on another origin can send If-Match and read the ETag. */
+    @Test
+    void letsABrowserOnAnotherOriginUseVersions() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options("/api/profiles/{id}", java.util.UUID.randomUUID())
+                        .header(HttpHeaders.ORIGIN, "http://localhost:5174")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PUT")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "if-match,content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
+                        org.hamcrest.Matchers.containsStringIgnoringCase("if-match")));
+
+        mockMvc.perform(as(get("/api/profiles"), tokenFor("bob")).header(HttpHeaders.ORIGIN, "http://localhost:5174"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        org.hamcrest.Matchers.containsString("ETag")));
     }
 
     /** Tag filtering is exact, unlike the free-text search which would also match the inputs. */
@@ -529,7 +607,7 @@ class ProfileIntegrationTest {
                 .andExpect(jsonPath("$.updatedBy").value("alice"));
 
         // bob edits it: the author stays alice, the last hand becomes bob.
-        mockMvc.perform(as(put("/api/profiles/{id}", id), tokenFor("bob"))
+        mockMvc.perform(as(put("/api/profiles/{id}", id), tokenFor("bob")).header(HttpHeaders.IF_MATCH, etagOf(alice, id))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(checkout("Authored", "ORD-AUTHOR-2")))
                 .andExpect(status().isOk())
@@ -541,7 +619,7 @@ class ProfileIntegrationTest {
                 .andExpect(jsonPath("$.items[0].updatedBy").value("bob"));
 
         // Claiming to be someone else in the body changes nothing: the name is read from the token.
-        mockMvc.perform(as(put("/api/profiles/{id}", id), tokenFor("bob"))
+        mockMvc.perform(as(put("/api/profiles/{id}", id), tokenFor("bob")).header(HttpHeaders.IF_MATCH, etagOf(alice, id))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Authored","updatedBy":"alice","createdBy":"alice"}"""))

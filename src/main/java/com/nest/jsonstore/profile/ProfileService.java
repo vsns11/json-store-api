@@ -5,6 +5,7 @@ import com.nest.jsonstore.config.LimitsProperties;
 import com.nest.jsonstore.error.InvalidInputsException;
 import com.nest.jsonstore.error.PayloadTooLargeException;
 import com.nest.jsonstore.error.ProfileNotFoundException;
+import com.nest.jsonstore.error.VersionMismatchException;
 import com.nest.jsonstore.profile.dto.PageResponse;
 import com.nest.jsonstore.profile.dto.ProfileRequest;
 import com.nest.jsonstore.profile.dto.ProfileResponse;
@@ -27,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 @Service
@@ -85,9 +87,13 @@ public class ProfileService {
         return mapper.toResponse(repository.saveAndFlush(profile));
     }
 
+    /**
+     * @param expected the version the change was made to, from If-Match; empty to overwrite whatever
+     *                 is stored
+     */
     @Transactional
-    public ProfileResponse update(UUID id, ProfileRequest request) {
-        Profile profile = repository.findById(id).orElseThrow(() -> new ProfileNotFoundException(id));
+    public ProfileResponse update(UUID id, OptionalLong expected, ProfileRequest request) {
+        Profile profile = current(id, expected);
         if (request.template() == null) {
             // Renaming or retagging a profile is not a reason to rebuild its inputs, and a profile stored
             // before templates were recorded has nothing to rebuild them from.
@@ -109,11 +115,20 @@ public class ProfileService {
     }
 
     @Transactional
-    public void delete(UUID id) {
-        if (!repository.existsById(id)) {
-            throw new ProfileNotFoundException(id);
+    public void delete(UUID id, OptionalLong expected) {
+        repository.delete(current(id, expected));
+    }
+
+    /**
+     * The stored profile, provided it is still the version the caller last saw. The version column
+     * catches a save that lands between this check and the commit, so the check cannot be raced.
+     */
+    private Profile current(UUID id, OptionalLong expected) {
+        Profile profile = repository.findById(id).orElseThrow(() -> new ProfileNotFoundException(id));
+        if (expected.isPresent() && expected.getAsLong() != profile.getVersion()) {
+            throw new VersionMismatchException(profile.getName(), profile.getUpdatedBy());
         }
-        repository.deleteById(id);
+        return profile;
     }
 
     public ProfileStats stats() {

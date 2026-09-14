@@ -176,9 +176,15 @@ things readable without a token are the OpenAPI description and its viewer.
 | `GET` | `/api/profiles/stats` | Profile count, total input bytes, last change |
 | `GET` | `/api/profiles/{id}` | One profile including its inputs, and who wrote it |
 | `POST` | `/api/profiles` | Create from templates · `201` with the stored profile, inputs built by the server |
-| `PUT` | `/api/profiles/{id}` | Replace name, description and tags; with `template`, rebuild the inputs too |
-| `DELETE` | `/api/profiles/{id}` | `204` — requires the admins group |
+| `PUT` | `/api/profiles/{id}` | Replace name, description and tags; with `template`, rebuild the inputs too · needs `If-Match` |
+| `DELETE` | `/api/profiles/{id}` | `204` — requires the admins group · needs `If-Match` |
 | `POST` | `/api/admin/profiles/recompose` | Rebuild stored inputs from their own templates; a dry run unless `apply=true` — admins only |
+
+A profile's `ETag` is its version, sent with every read and save, and in each list item as
+`version`. Changing or deleting a profile must send it back as `If-Match`, so two people editing the
+same profile cannot silently overwrite each other: without the header the answer is `428`, and when
+someone else has saved since, `412` naming who. `If-Match: *` overwrites whatever is stored, on
+purpose.
 
 A write carries what was chosen and typed, never the inputs themselves. The server checks the
 selection and every value against the catalogue, composes the documents, and stores its own result,

@@ -47,6 +47,7 @@ class ProfileMapper {
                 documentNames(profile.getPayload()),
                 preview(profile.getPayload()),
                 profile.getSizeBytes(),
+                profile.getVersion(),
                 profile.getUpdatedBy(),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt());

@@ -94,8 +94,10 @@ class SecurityConfig {
             configuration.setAllowedOrigins(origins);
         }
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id"));
-        configuration.setExposedHeaders(List.of("X-Request-Id"));
+        // If-Match carries the version a change was made to, and ETag is where a read reports it; a
+        // browser on another origin can neither send the one nor read the other unless named here.
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id", "If-Match"));
+        configuration.setExposedHeaders(List.of("X-Request-Id", "ETag"));
         configuration.setMaxAge(Duration.ofHours(1));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -14,6 +14,8 @@ public record ProfileSummary(
         List<String> documents,
         String preview,
         int sizeBytes,
+        /** Sent back in If-Match to delete straight from the list. */
+        long version,
         String updatedBy,
         Instant createdAt,
         Instant updatedAt

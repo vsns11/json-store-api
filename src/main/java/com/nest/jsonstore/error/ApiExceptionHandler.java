@@ -141,10 +141,24 @@ class ApiExceptionHandler {
                 .body(ApiError.of(405, "Method not allowed", e.getMethod() + " is not supported on this endpoint"));
     }
 
+    @ExceptionHandler(PreconditionRequiredException.class)
+    ResponseEntity<ApiError> handlePreconditionRequired(PreconditionRequiredException e) {
+        return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
+                .body(ApiError.of(428, "Version required", e.getMessage()));
+    }
+
+    /** A change made to a copy that is out of date: someone else has saved since it was loaded. */
+    @ExceptionHandler(VersionMismatchException.class)
+    ResponseEntity<ApiError> handleStale(VersionMismatchException e) {
+        return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
+                .body(ApiError.of(412, "Changed since loaded", e.getMessage()));
+    }
+
+    /** The same, when the other save landed between the version check and this one's commit. */
     @ExceptionHandler(OptimisticLockingFailureException.class)
     ResponseEntity<ApiError> handleConflict(OptimisticLockingFailureException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiError.of(409, "Conflict", "This profile was changed elsewhere — reload it and try again"));
+        return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
+                .body(ApiError.of(412, "Changed since loaded", "This profile was changed elsewhere since you loaded it"));
     }
 
     /**
