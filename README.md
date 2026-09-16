@@ -208,7 +208,8 @@ select name, payload -> 'assertions' ->> 'status' as expected from profile;
 
 The running service describes itself: <http://localhost:8080/swagger-ui.html> for the interactive
 viewer, <http://localhost:8080/v3/api-docs> for the OpenAPI description a client generator can read.
-Both are reachable without a token — they describe the API and expose no data.
+Both are reachable without a token — they describe the API and expose no data. The port is whichever
+the API was started on: 8090 in the steps above.
 
 ## Configuration
 
