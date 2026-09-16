@@ -44,7 +44,8 @@ createdb jsonstore
 That is the whole thing. It connects to `localhost:5432/jsonstore` as your operating-system user with
 no password, which is what a stock Homebrew or apt PostgreSQL gives you, applies its migrations, and
 starts an in-process LDAP server so there is a directory to sign in against. An empty database also
-gets four example profiles, composed from the template catalogue so they match what the form builds.
+gets the example profiles written for the catalogue it is serving, composed the same way the form
+composes, so they match what a user would build.
 
 Check it came up:
 
@@ -61,12 +62,78 @@ Sign-in answers with the token and who it belongs to. Send it back as `Authoriza
   "tokenType": "Bearer",
   "expiresIn": 28800,
   "expiresAt": "2026-01-01T09:00:00Z",
-  "user": { "username": "alice", "roles": ["ADMINS", "DEVELOPERS"] }
+  "user": { "username": "alice", "roles": ["ADMIN", "EDITOR", "VIEWER"] }
 }
 ```
 
 Override any of the connection details with the environment variables below — a different host, a real
 username and password, a different database name.
+
+### Running it from the jar, on 8090, with the TMF702 catalogue
+
+`./mvnw spring-boot:run` above is the short way, and it uses port 8080 and the test-scenario
+catalogue. These are the steps for the other common setup: the built jar, the API on 8090 with
+Actuator on 8091, and the TMF702 resource catalogue. Every step is separate so any one can be redone
+on its own.
+
+```bash
+# 1. PostgreSQL has to be up, with a database to use. Both are one-offs.
+pg_isready || brew services start postgresql@14
+createdb jsonstore
+
+# 2. Use a Java 21 runtime for both the build and the run. Whatever `java` your PATH finds first is
+#    used otherwise, and a newer one than this project builds for will not necessarily start the jar.
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # macOS; elsewhere point it at your JDK 21
+"$JAVA_HOME/bin/java" -version                     # should say 21
+
+# 3. Build the jar. Do this again after every change to the API.
+cd json-store-api
+./mvnw -q package -DskipTests        # or ./mvnw package to run the tests too (needs Docker)
+
+# 4. Start it. Migrations run at startup, and an empty database gets the examples.
+SERVER_PORT=8090 MANAGEMENT_PORT=8091 \
+  APP_TEMPLATES_CATALOG=file:$PWD/src/main/resources/templates/tmf702-catalog.json \
+  "$JAVA_HOME/bin/java" -jar target/json-store-1.0.0.jar
+```
+
+It is up when both of these answer — the first says the database is reachable, the second hands out a
+token:
+
+```bash
+curl -s localhost:8091/actuator/health/readiness            # {"status":"UP"}
+curl -s localhost:8090/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"secret"}'
+```
+
+Then start the browser app against it, from the `json-store-web` repository beside this one:
+
+```bash
+cd ../json-store-web
+npm install                                                  # first time only
+API_URL=http://localhost:8090 npx vite --port 5174 --strictPort
+```
+
+Open <http://localhost:5174> and sign in as one of the accounts below.
+
+To stop the API, find the process listening on its port and stop that one by its id:
+
+```bash
+lsof -nP -iTCP:8090 -sTCP:LISTEN     # the PID is the second column
+kill <pid>
+```
+
+Stop it by PID rather than by name: a `pkill -f json-store` also kills any other copy you have
+running. The jar keeps no state of its own, so it can be stopped and started whenever.
+
+Notes on this setup:
+
+- `APP_TEMPLATES_CATALOG` decides which catalogue the form offers. Leave it out for the
+  test-scenario catalogue built into the jar, or point it at any file — `classpath:templates/tmf702-catalog.json`
+  serves the TMF702 one from inside the jar instead of the working copy.
+- Profiles saved under one catalogue do not fit another. The editor says so plainly and keeps their
+  inputs, but their fields can only be edited under the catalogue they were built with.
+- Changing the catalogue file means restarting the API: it is read once at startup, and a malformed
+  one stops the API rather than breaking a user's first click.
 
 ### Running the API in a container instead
 
@@ -79,15 +146,18 @@ and a `pg_hba.conf` entry). Running the API directly, as above, avoids all of th
 
 Both paths give you the same two accounts:
 
-| User | Password | Groups | Can delete |
-| --- | --- | --- | --- |
-| `alice` | `secret` | admins, developers | yes |
-| `bob` | `secret` | developers | no |
+| User | Password | Groups | Role | May |
+| --- | --- | --- | --- | --- |
+| `alice` | `secret` | admins, developers | ADMIN | everything, including deleting |
+| `bob` | `secret` | developers | EDITOR | read, create and change profiles |
+| `dave` | `secret` | auditors | VIEWER | read only |
+| `carol` | `secret` | none | — | nothing: sign-in is refused |
 
 ### The web client
 
 The browser app is a separate repository, `json-store-web`. Start this API first, then follow that
-repository's README; in development it proxies to `localhost:8080`.
+repository's README. Its dev server proxies `/api` to `localhost:8080` by default; point it elsewhere
+with `API_URL`, as in the 8090 steps above.
 
 ### If something does not start
 
@@ -97,9 +167,14 @@ repository's README; in development it proxies to `localhost:8080`.
 | `database "jsonstore" does not exist` | `createdb jsonstore` |
 | `password authentication failed` | `DB_USER`/`DB_PASSWORD` do not match. Leave both unset to connect as your own account |
 | `release version 21 not supported` | An older JDK is first on the path: `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` on macOS |
+| The jar will not start, or fails oddly at startup | A newer JDK than 21 is first on the path (`java -version`). Run it with `"$(/usr/libexec/java_home -v 21)/bin/java" -jar …` |
 | `Validate failed: migration checksum mismatch` | An applied migration was edited. In development, `dropdb jsonstore && createdb jsonstore` and start again |
 | Sign-in returns 401 for a user you know exists | `LDAP_USER_DN_PATTERNS` does not match where users live in your directory |
 | Port 8080 already taken | `SERVER_PORT=8081 ./mvnw spring-boot:run` |
+| Port 8090 already taken | Something is already serving it: `lsof -nP -iTCP:8090 -sTCP:LISTEN`, then `kill <pid>` if it is an old copy |
+| The browser app says the API cannot be reached | The API is not running, or is on another port than the dev server proxies to. Check `curl localhost:8090/api/auth/login …` and how the dev server was started |
+| Sign-in says the account is in no group that may use JSON Store | Its directory groups are not mapped: see `ROLE_VIEWER_GROUPS`, `ROLE_EDITOR_GROUPS` and `ROLE_ADMIN_GROUPS` |
+| The editor says a profile was made with templates this catalogue does not have | `APP_TEMPLATES_CATALOG` is serving a different catalogue from the one the profile was built with |
 
 ## Looking at the data
 
