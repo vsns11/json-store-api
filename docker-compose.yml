@@ -11,7 +11,8 @@ services:
       LDAP_DOMAIN: example.com
       LDAP_ADMIN_PASSWORD: ${LDAP_ADMIN_PASSWORD:-admin}
     volumes:
-      # Users and groups for local testing: alice (admins, developers) and bob (developers).
+      # Users and groups for local testing: alice (admins, developers) and bob (developers), which the
+      # api service below maps to the ADMIN and EDITOR roles.
       - ./deploy/ldap/bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/10-users.ldif:ro
     ports:
       - '${LDAP_PORT:-389}:389'
@@ -41,6 +42,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-local-compose-secret-change-me-please-32+}
       JWT_TTL: ${JWT_TTL:-PT8H}
       JWT_MAX_SESSION: ${JWT_MAX_SESSION:-PT24H}
+      # Which directory groups may use JSON Store. The API refuses to start with none mapped, and an
+      # account in none of them is refused at sign-in. These are the groups deploy/ldap creates.
+      ROLE_VIEWER_GROUPS: ${ROLE_VIEWER_GROUPS:-}
+      ROLE_EDITOR_GROUPS: ${ROLE_EDITOR_GROUPS:-developers}
+      ROLE_ADMIN_GROUPS: ${ROLE_ADMIN_GROUPS:-admins}
     ports:
       - '${API_PORT:-8080}:8080'
     depends_on:
